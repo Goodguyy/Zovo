@@ -8,9 +8,9 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Environment variables - supports both EXPO_PUBLIC_ and VITE_ prefixes
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+// Environment variables
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 // Check if Supabase is configured
 const isConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
