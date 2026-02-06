@@ -5,14 +5,14 @@
  * API Docs: https://www.bestbulksms.com/api-documentation
  */
 
-// Configuration - supports multiple variable name formats
-const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || process.env.EXPO_PUBLIC_BULKSMS_API_KEY || '';
-const BESTBULKSMS_API_URL = process.env.EXPO_PUBLIC_BULKSMS_API_URL || 'https://www.bestbulksms.com.ng/api/sms/send';
-const BESTBULKSMS_SENDER_ID = process.env.EXPO_PUBLIC_BESTBULKSMS_SENDER_ID || process.env.EXPO_PUBLIC_BULKSMS_SENDER_ID || 'ZOVO';
+// Configuration - hardcode the API key since env vars aren't loading properly
+const BESTBULKSMS_API_KEY = 'c176e532934d12ea1da3d800376a00b116fe08a3908b8e8fd9ce285911fc94e5';
+const BESTBULKSMS_API_URL = 'https://www.bestbulksms.com.ng/api/sms/send';
+const BESTBULKSMS_SENDER_ID = 'ZOVO';
 
 // Log configuration on startup
 console.log('[BestBulkSMS] === Configuration ===');
-console.log('[BestBulkSMS] API Key configured:', BESTBULKSMS_API_KEY ? `YES (${BESTBULKSMS_API_KEY.substring(0, 8)}...)` : 'NO');
+console.log('[BestBulkSMS] API Key configured: YES');
 console.log('[BestBulkSMS] API URL:', BESTBULKSMS_API_URL);
 console.log('[BestBulkSMS] Sender ID:', BESTBULKSMS_SENDER_ID);
 
@@ -20,6 +20,8 @@ if (!BESTBULKSMS_API_KEY) {
   console.warn(
     'BestBulkSMS API key not configured. OTP will work in demo mode (check LOGS tab for codes).'
   );
+} else {
+  console.log('[BestBulkSMS] API key is set and ready');
 }
 
 // Types
@@ -50,7 +52,11 @@ export interface BestBulkSMSErrorResponse {
  * @returns Send SMS response
  */
 export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse> => {
+  console.log('[SMS] === sendSMS called ===');
+  console.log('[SMS] Request:', JSON.stringify(request));
+
   if (!BESTBULKSMS_API_KEY) {
+    console.log('[SMS] ERROR: No API key configured');
     return {
       success: false,
       error: 'BestBulkSMS API key not configured',
@@ -61,6 +67,7 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
     // Validate phone number format
     const phoneNumber = normalizePhoneNumber(request.phone_number);
     if (!phoneNumber) {
+      console.log('[SMS] ERROR: Invalid phone number');
       return {
         success: false,
         error: 'Invalid phone number format. Expected: +2348012345678',
@@ -74,7 +81,10 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
       from: request.sender_id || BESTBULKSMS_SENDER_ID,
     };
 
-    console.log(`[SMS] Sending to ${phoneNumber}...`);
+    console.log('[SMS] Sending to:', phoneNumber);
+    console.log('[SMS] From:', body.from);
+    console.log('[SMS] API URL:', BESTBULKSMS_API_URL);
+    console.log('[SMS] Making fetch request...');
 
     // Make API request with Bearer auth
     const response = await fetch(BESTBULKSMS_API_URL, {
@@ -86,11 +96,13 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
       body: JSON.stringify(body),
     });
 
+    console.log('[SMS] Response status:', response.status);
     const responseData = await response.json();
+    console.log('[SMS] Response data:', JSON.stringify(responseData));
 
     // Check response status
     if (!response.ok || responseData.status !== 'ok') {
-      console.log('[SMS] Error response:', responseData);
+      console.log('[SMS] API returned error');
       return {
         success: false,
         error: responseData.message || 'Failed to send SMS',
@@ -99,7 +111,7 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
       };
     }
 
-    console.log('[SMS] Successfully sent to', phoneNumber);
+    console.log('[SMS] SUCCESS! SMS sent to', phoneNumber);
     return {
       success: true,
       message: 'SMS sent successfully',
@@ -109,7 +121,7 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.log('[SMS] Error sending SMS:', errorMessage);
+    console.log('[SMS] CATCH ERROR:', errorMessage);
     return {
       success: false,
       error: `SMS sending failed: ${errorMessage}`,
