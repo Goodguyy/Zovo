@@ -22,6 +22,8 @@ import {
   loadEngagementState,
 } from './engagement';
 import { useAppStore } from './store';
+import { getPostsByUserId } from './services/supabaseService';
+import type { DBPost } from './supabase';
 
 interface UseEngagementReturn {
   // Engagement data
@@ -185,7 +187,6 @@ export function usePostViewTracker(postId: string) {
  * Get aggregated engagement stats for a user's profile.
  */
 export function useEngagementStats(userId: string) {
-  const posts = useAppStore((s) => s.posts);
   const [stats, setStats] = useState({
     totalViews: 0,
     totalShares: 0,
@@ -197,7 +198,8 @@ export function useEngagementStats(userId: string) {
     const loadStats = async () => {
       await loadEngagementState();
 
-      const userPosts = posts.filter((p) => p.userId === userId);
+      // Fetch posts from Supabase
+      const userPosts = await getPostsByUserId(userId);
       let totalViews = 0;
       let totalShares = 0;
       let totalEndorsements = 0;
@@ -225,7 +227,7 @@ export function useEngagementStats(userId: string) {
     });
 
     return () => unsubscribe();
-  }, [userId, posts]);
+  }, [userId]);
 
   return stats;
 }

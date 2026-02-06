@@ -25,7 +25,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useAppStore, formatAccountAge, formatTimeAgo } from '@/lib/store';
 import { useEngagementStats } from '@/lib/useEngagement';
-import { getUserEndorsementsReceived, subscribeToEngagement } from '@/lib/engagement';
+import { getUserEndorsementsReceived, subscribeToEngagement, EndorsementRecord } from '@/lib/engagement';
+import { useSupabasePosts, useSupabaseProfile, AppPost } from '@/lib/hooks/useSupabaseData';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
 
@@ -34,13 +35,10 @@ export default function ProfileTabScreen() {
   const router = useRouter();
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
-  const posts = useAppStore((s) => s.posts);
   const logout = useAppStore((s) => s.logout);
-  const profiles = useAppStore((s) => s.profiles);
 
-  const userPosts = currentUser
-    ? posts.filter((p) => p.userId === currentUser.id)
-    : [];
+  // Fetch user posts from Supabase
+  const { posts: userPosts } = useSupabasePosts({ userId: currentUser?.id });
 
   // Real-time engagement stats
   const engagementStats = useEngagementStats(currentUser?.id ?? '');
@@ -361,10 +359,7 @@ export default function ProfileTabScreen() {
             </View>
           ) : (
             <View className="bg-white rounded-xl overflow-hidden">
-              {userEndorsements.slice(0, 3).map((endorsement, index) => {
-                const endorser = profiles.find(
-                  (p) => p.id === endorsement.fromUserId
-                );
+              {userEndorsements.slice(0, 3).map((endorsement: EndorsementRecord, index: number) => {
                 return (
                   <Pressable
                     key={endorsement.id}
@@ -381,7 +376,7 @@ export default function ProfileTabScreen() {
                     </View>
                     <View className="ml-3 flex-1">
                       <Text className="text-gray-900 font-medium">
-                        {endorser?.name || "Anonymous"}
+                        Anonymous
                       </Text>
                       <Text
                         className="text-gray-500 text-sm mt-0.5"

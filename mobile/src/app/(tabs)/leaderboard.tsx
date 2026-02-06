@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Trophy, Flame, TrendingUp, Camera } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withSpring, withSequence } from 'react-native-reanimated';
-import { useAppStore } from '@/lib/store';
+import { useSupabaseLeaderboard } from '@/lib/hooks/useSupabaseData';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
 
 interface LeaderboardEntry {
+  rank: number;
   userId: string;
   userName: string;
   userSkills: string[];
@@ -17,65 +18,39 @@ interface LeaderboardEntry {
   totalShares: number;
   totalEndorsements: number;
   engagementScore: number;
-  rank: number;
 }
 
 export default function LeaderboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const posts = useAppStore((s) => s.posts);
-  const profiles = useAppStore((s) => s.profiles);
   const [timeframe, setTimeframe] = useState<'week' | 'all'>('week');
+
+  // Fetch leaderboard from Supabase
+  const { leaderboard: profiles, loading, refetch } = useSupabaseLeaderboard(20);
 
   // Animation values for top 3
   const topScale = useSharedValue(1);
 
-  // Build leaderboard from local store data
+  // Build leaderboard entries from profiles
   const leaderboard: LeaderboardEntry[] = React.useMemo(() => {
-    const userEngagement: Record<string, { views: number; shares: number; endorsements: number }> = {};
-
-    // Aggregate engagement per user from posts
-    posts.forEach(post => {
-      if (!userEngagement[post.userId]) {
-        userEngagement[post.userId] = { views: 0, shares: 0, endorsements: 0 };
-      }
-      userEngagement[post.userId].views += post.viewCount;
-      userEngagement[post.userId].shares += post.shareCount;
-    });
-
-    // Add endorsements from profiles
-    profiles.forEach(profile => {
-      if (!userEngagement[profile.id]) {
-        userEngagement[profile.id] = { views: 0, shares: 0, endorsements: 0 };
-      }
-      userEngagement[profile.id].endorsements = profile.endorsementCount;
-    });
-
-    // Build leaderboard entries
-    const entries: LeaderboardEntry[] = Object.entries(userEngagement)
-      .map(([userId, engagement]) => {
-        const profile = profiles.find(p => p.id === userId);
-        if (!profile) return null;
-
-        const engagementScore = engagement.views + (engagement.shares * 2) + (engagement.endorsements * 3);
-
+    return profiles
+      .filter(p => p.totalViews > 0 || p.totalShares > 0 || p.endorsementCount > 0)
+      .map((profile, index) => {
+        const engagementScore = profile.totalViews + (profile.totalShares * 2) + (profile.endorsementCount * 3);
         return {
-          userId,
+          rank: index + 1,
+          userId: profile.id,
           userName: profile.name,
           userSkills: profile.skills,
-          totalViews: engagement.views,
-          totalShares: engagement.shares,
-          totalEndorsements: engagement.endorsements,
+          totalViews: profile.totalViews,
+          totalShares: profile.totalShares,
+          totalEndorsements: profile.endorsementCount,
           engagementScore,
-          rank: 0,
         };
       })
-      .filter((entry): entry is LeaderboardEntry => entry !== null && entry.engagementScore > 0)
       .sort((a, b) => b.engagementScore - a.engagementScore)
       .map((entry, index) => ({ ...entry, rank: index + 1 }));
-
-    return entries;
-  }, [posts, profiles]);
+  }, [profiles]);
 
   useEffect(() => {
     if (leaderboard.length > 0) {
@@ -158,8 +133,13 @@ export default function LeaderboardScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Empty State */}
-        {leaderboard.length === 0 ? (
+        {/* Loading State */}
+        {loading ? (
+          <View className="flex-1 items-center justify-center py-16">
+            <ActivityIndicator size="large" color="#059669" />
+            <Text className="text-gray-500 mt-4">Loading leaderboard...</Text>
+          </View>
+        ) : leaderboard.length === 0 ? (
           <Animated.View
             entering={FadeInDown}
             className="flex-1 items-center justify-center px-6 py-16"

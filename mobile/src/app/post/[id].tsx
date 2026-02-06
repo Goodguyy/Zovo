@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Linking,
   TextInput,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,7 +27,6 @@ import {
   TrendingUp,
   Users,
   AlertCircle,
-  X,
   Heart,
 } from 'lucide-react-native';
 import Animated, {
@@ -40,21 +40,90 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useAppStore, formatTimeAgo } from '@/lib/store';
 import { useEngagement } from '@/lib/useEngagement';
+import { useSupabaseProfile, AppPost, AppProfile } from '@/lib/hooks/useSupabaseData';
+import { getPostById, getProfileById } from '@/lib/services/supabaseService';
+import { DBPost } from '@/lib/supabase';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
+
+// Transform DB post to App post format
+const transformDBPostToAppPost = (dbPost: DBPost): AppPost => ({
+  id: dbPost.id,
+  userId: dbPost.user_id,
+  mediaUrl: dbPost.media_url,
+  mediaType: dbPost.media_type,
+  caption: dbPost.caption,
+  skills: dbPost.skills,
+  area: dbPost.area,
+  viewCount: dbPost.view_count,
+  shareCount: dbPost.share_count,
+  endorsementCount: dbPost.endorsement_count,
+  createdAt: dbPost.created_at,
+});
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const posts = useAppStore((s) => s.posts);
-  const profiles = useAppStore((s) => s.profiles);
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
 
-  const post = posts.find((p) => p.id === id);
-  const profile = post ? profiles.find((p) => p.id === post.userId) : null;
+  // State for fetched post and profile
+  const [post, setPost] = useState<AppPost | null>(null);
+  const [profile, setProfile] = useState<AppProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch post and profile from Supabase
+  const fetchPostAndProfile = useCallback(async () => {
+    if (!id) {
+      setLoading(false);
+      setError('No post ID provided');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const dbPost = await getPostById(id);
+      if (!dbPost) {
+        setError('Post not found');
+        setLoading(false);
+        return;
+      }
+
+      const appPost = transformDBPostToAppPost(dbPost);
+      setPost(appPost);
+
+      // Fetch the profile for this post
+      const dbProfile = await getProfileById(dbPost.user_id);
+      if (dbProfile) {
+        setProfile({
+          id: dbProfile.id,
+          phone: dbProfile.phone,
+          name: dbProfile.name,
+          whatsapp: dbProfile.whatsapp,
+          skills: dbProfile.skills,
+          area: dbProfile.area,
+          createdAt: dbProfile.created_at,
+          endorsementCount: dbProfile.total_endorsements,
+          totalViews: dbProfile.total_views,
+          totalShares: dbProfile.total_shares,
+        });
+      }
+    } catch (err) {
+      console.log('Error fetching post:', err);
+      setError('Failed to load post');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchPostAndProfile();
+  }, [fetchPostAndProfile]);
 
   // Real-time engagement tracking
   const {
@@ -74,10 +143,10 @@ export default function PostDetailScreen() {
 
   // Track view on mount
   useEffect(() => {
-    if (id && currentUser?.id) {
+    if (id && currentUser?.id && post) {
       trackView();
     }
-  }, [id, currentUser?.id, trackView]);
+  }, [id, currentUser?.id, post, trackView]);
 
   const [showEndorseForm, setShowEndorseForm] = useState(false);
   const [endorseMessage, setEndorseMessage] = useState('');
@@ -129,11 +198,37 @@ export default function PostDetailScreen() {
     transform: [{ scale: endorseScale.value }],
   }));
 
-  if (!post || !profile) {
+  // Loading state
+  if (loading) {
     return (
-      <View className="flex-1 bg-gray-50 items-center justify-center">
-        <Text className="text-gray-500">Post not found</Text>
-      </View>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View className="flex-1 bg-gray-50 items-center justify-center">
+          <ActivityIndicator size="large" color="#10b981" />
+          <Text className="text-gray-500 mt-3">Loading post...</Text>
+        </View>
+      </>
+    );
+  }
+
+  // Error or not found state
+  if (error || !post || !profile) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View className="flex-1 bg-gray-50 items-center justify-center px-6">
+          <AlertCircle size={48} color="#9ca3af" />
+          <Text className="text-gray-500 text-center mt-3">
+            {error || 'Post not found'}
+          </Text>
+          <Pressable
+            onPress={() => router.back()}
+            className="mt-4 bg-emerald-500 rounded-lg px-6 py-3"
+          >
+            <Text className="text-white font-medium">Go Back</Text>
+          </Pressable>
+        </View>
+      </>
     );
   }
 
@@ -146,8 +241,8 @@ export default function PostDetailScreen() {
         await trackShare('other');
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
-    } catch (error) {
-      console.log('Share error:', error);
+    } catch (err) {
+      console.log('Share error:', err);
     }
   };
 
@@ -275,7 +370,7 @@ export default function PostDetailScreen() {
           >
             {/* Skills */}
             <View className="flex-row flex-wrap gap-2 mb-4">
-              {post.skills.map((skill) => (
+              {post.skills.map((skill: string) => (
                 <View
                   key={skill}
                   className="bg-emerald-500 rounded-full px-3 py-1.5"
@@ -296,7 +391,7 @@ export default function PostDetailScreen() {
             <View className="flex-row items-center">
               <MapPin size={14} color="#6b7280" />
               <Text className="text-gray-500 text-sm ml-1">{post.area}</Text>
-              <Text className="text-gray-400 mx-2">•</Text>
+              <Text className="text-gray-400 mx-2">-</Text>
               <Clock size={14} color="#6b7280" />
               <Text className="text-gray-500 text-sm ml-1">
                 {formatTimeAgo(post.createdAt)}
@@ -498,40 +593,35 @@ export default function PostDetailScreen() {
               </View>
             ) : (
               <View className="bg-white rounded-xl overflow-hidden">
-                {endorsements.map((endorsement, index) => {
-                  const endorser = profiles.find(
-                    (p) => p.id === endorsement.fromUserId
-                  );
-                  return (
-                    <Pressable
-                      key={endorsement.id}
-                      onPress={() =>
-                        router.push(`/profile/${endorsement.fromUserId}`)
-                      }
-                      className={cn(
-                        "p-4 flex-row items-start active:bg-gray-50",
-                        index > 0 && "border-t border-gray-100"
-                      )}
-                    >
-                      <View className="w-10 h-10 rounded-full bg-amber-100 items-center justify-center">
-                        <Text className="text-amber-700 font-bold">
-                          {endorser?.name.charAt(0) || '?'}
-                        </Text>
-                      </View>
-                      <View className="ml-3 flex-1">
-                        <Text className="text-gray-900 font-medium">
-                          {endorser?.name || 'Anonymous'}
-                        </Text>
-                        <Text className="text-gray-600 text-sm mt-0.5">
-                          "{endorsement.message}"
-                        </Text>
-                        <Text className="text-gray-400 text-xs mt-1">
-                          {formatTimeAgo(new Date(endorsement.timestamp).toISOString())}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
+                {endorsements.map((endorsement: { id: string; fromUserId: string; message: string; timestamp: number; fromUserName?: string }, index: number) => (
+                  <Pressable
+                    key={endorsement.id}
+                    onPress={() =>
+                      router.push(`/profile/${endorsement.fromUserId}`)
+                    }
+                    className={cn(
+                      "p-4 flex-row items-start active:bg-gray-50",
+                      index > 0 && "border-t border-gray-100"
+                    )}
+                  >
+                    <View className="w-10 h-10 rounded-full bg-amber-100 items-center justify-center">
+                      <Text className="text-amber-700 font-bold">
+                        {endorsement.fromUserName?.charAt(0) || '?'}
+                      </Text>
+                    </View>
+                    <View className="ml-3 flex-1">
+                      <Text className="text-gray-900 font-medium">
+                        {endorsement.fromUserName || 'Anonymous'}
+                      </Text>
+                      <Text className="text-gray-600 text-sm mt-0.5">
+                        "{endorsement.message}"
+                      </Text>
+                      <Text className="text-gray-400 text-xs mt-1">
+                        {formatTimeAgo(new Date(endorsement.timestamp).toISOString())}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
               </View>
             )}
           </Animated.View>
@@ -542,10 +632,10 @@ export default function PostDetailScreen() {
               Safety Tips
             </Text>
             <Text className="text-blue-700 text-xs leading-5">
-              • Meet in public for initial discussions{'\n'}
-              • Agree on price before work begins{'\n'}
-              • Pay only after work is completed{'\n'}
-              • Trust your instincts
+              - Meet in public for initial discussions{'\n'}
+              - Agree on price before work begins{'\n'}
+              - Pay only after work is completed{'\n'}
+              - Trust your instincts
             </Text>
           </View>
         </ScrollView>

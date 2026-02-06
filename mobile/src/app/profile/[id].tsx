@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Pressable,
   Linking,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,8 +24,10 @@ import {
   Eye,
   ChevronRight,
 } from 'lucide-react-native';
-import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { useAppStore, formatAccountAge, formatTimeAgo } from '@/lib/store';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { formatAccountAge, formatTimeAgo } from '@/lib/store';
+import { useSupabaseProfile, useSupabasePosts, useSupabaseProfiles, AppPost, AppProfile } from '@/lib/hooks/useSupabaseData';
+import { getEndorsementsForUser } from '@/lib/services/supabaseService';
 import { cn } from '@/lib/cn';
 
 export default function ProfileScreen() {
@@ -32,15 +35,32 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const profiles = useAppStore((s) => s.profiles);
-  const posts = useAppStore((s) => s.posts);
-  const endorsements = useAppStore((s) => s.endorsements);
+  // Fetch profile data from Supabase
+  const { profile, loading: profileLoading } = useSupabaseProfile(id);
+  const { posts: userPosts, loading: postsLoading } = useSupabasePosts({ userId: id });
+  const { profiles } = useSupabaseProfiles();
 
-  const profile = profiles.find((p) => p.id === id);
-  const userPosts = posts.filter((p) => p.userId === id);
-  const userEndorsements = endorsements.filter((e) => e.toUserId === id);
-  const givenEndorsements = endorsements.filter((e) => e.fromUserId === id);
-  const totalViews = userPosts.reduce((sum, p) => sum + p.viewCount, 0);
+  // Fetch endorsements
+  const [userEndorsements, setUserEndorsements] = useState<any[]>([]);
+  const [givenEndorsements, setGivenEndorsements] = useState<any[]>([]);
+  const [endorsementsLoading, setEndorsementsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchEndorsements() {
+      if (!id) return;
+      setEndorsementsLoading(true);
+      const endorsements = await getEndorsementsForUser(id);
+      setUserEndorsements(endorsements);
+      // For now, given endorsements would need a different query
+      // This is a placeholder - we'd need to add a service function for this
+      setGivenEndorsements([]);
+      setEndorsementsLoading(false);
+    }
+    fetchEndorsements();
+  }, [id]);
+
+  const totalViews = userPosts.reduce((sum: number, p: AppPost) => sum + p.viewCount, 0);
+  const loading = profileLoading || postsLoading || endorsementsLoading;
 
   if (!profile) {
     return (
@@ -139,7 +159,7 @@ export default function ProfileScreen() {
 
             {/* Skills */}
             <View className="flex-row flex-wrap justify-center gap-2 mt-4">
-              {profile.skills.map((skill) => (
+              {profile.skills.map((skill: string) => (
                 <View
                   key={skill}
                   className="bg-emerald-100 rounded-full px-4 py-2"
@@ -220,7 +240,7 @@ export default function ProfileScreen() {
               </View>
             ) : (
               <View className="bg-white rounded-xl overflow-hidden">
-                {userPosts.map((post, index) => (
+                {userPosts.map((post: AppPost, index: number) => (
                   <Pressable
                     key={post.id}
                     onPress={() => router.push(`/post/${post.id}`)}
@@ -236,7 +256,7 @@ export default function ProfileScreen() {
                     />
                     <View className="ml-3 flex-1 justify-center">
                       <View className="flex-row flex-wrap gap-1 mb-1">
-                        {post.skills.map((skill) => (
+                        {post.skills.map((skill: string) => (
                           <View
                             key={skill}
                             className="bg-emerald-100 rounded-full px-2 py-0.5"
@@ -289,9 +309,9 @@ export default function ProfileScreen() {
               </View>
             ) : (
               <View className="bg-white rounded-xl overflow-hidden">
-                {userEndorsements.map((endorsement, index) => {
+                {userEndorsements.map((endorsement: any, index: number) => {
                   const endorser = profiles.find(
-                    (p) => p.id === endorsement.fromUserId
+                    (p: AppProfile) => p.id === endorsement.fromUserId
                   );
                   return (
                     <Pressable
@@ -336,9 +356,9 @@ export default function ProfileScreen() {
                 Endorsements Given ({givenEndorsements.length})
               </Text>
               <View className="bg-white rounded-xl overflow-hidden">
-                {givenEndorsements.map((endorsement, index) => {
+                {givenEndorsements.map((endorsement: any, index: number) => {
                   const endorsed = profiles.find(
-                    (p) => p.id === endorsement.toUserId
+                    (p: AppProfile) => p.id === endorsement.toUserId
                   );
                   return (
                     <Pressable

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, Image, Alert, Linking } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, Image, Alert, Linking, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Camera, ImagePlus, X, Check, MapPin, Briefcase } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeIn, FadeInDown, SlideInUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS, generateId } from '@/lib/store';
+import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS } from '@/lib/store';
+import { createPost } from '@/lib/services/supabaseService';
 import { cn } from '@/lib/cn';
 
 export default function CreatePostScreen() {
@@ -14,7 +15,7 @@ export default function CreatePostScreen() {
   const router = useRouter();
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
-  const addPost = useAppStore((s) => s.addPost);
+  const [isPosting, setIsPosting] = useState(false);
 
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
@@ -68,7 +69,7 @@ export default function CreatePostScreen() {
     }
   };
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!isAuthenticated || !currentUser) {
       router.push('/auth');
       return;
@@ -89,20 +90,23 @@ export default function CreatePostScreen() {
       return;
     }
 
-    const newPost = {
-      id: generateId(),
+    setIsPosting(true);
+
+    const result = await createPost({
       userId: currentUser.id,
       mediaUrl: mediaUri,
-      mediaType: 'photo' as const,
+      mediaType: 'photo',
       caption: caption.trim() || 'Check out my work!',
       skills: selectedSkills,
       area: selectedArea,
-      viewCount: 0,
-      shareCount: 0,
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    addPost(newPost);
+    setIsPosting(false);
+
+    if (!result.success) {
+      Alert.alert('Error', result.error || 'Failed to create post. Please try again.');
+      return;
+    }
 
     // Reset form
     setMediaUri(null);

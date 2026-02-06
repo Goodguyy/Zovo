@@ -1,11 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl, Share } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Filter, X, TrendingUp, Camera } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, SlideInDown } from 'react-native-reanimated';
 import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS } from '@/lib/store';
+import { useSupabasePosts } from '@/lib/hooks/useSupabaseData';
 import { recordShare } from '@/lib/engagement';
 import { PostCard } from '@/components/PostCard';
 import { cn } from '@/lib/cn';
@@ -14,7 +15,6 @@ import * as Haptics from 'expo-haptics';
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const posts = useAppStore((s) => s.posts);
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const [refreshing, setRefreshing] = useState(false);
@@ -22,21 +22,24 @@ export default function FeedScreen() {
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
 
-  const filteredPosts = posts
-    .filter((post) => {
-      if (selectedArea && post.area !== selectedArea) return false;
-      if (selectedSkill && !post.skills.includes(selectedSkill)) return false;
-      return true;
-    })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  // Fetch posts from Supabase
+  const { posts, loading, refetch } = useSupabasePosts({
+    area: selectedArea || undefined,
+    skill: selectedSkill || undefined,
+  });
 
-  const onRefresh = useCallback(() => {
+  // Posts are already filtered by the hook, just sort by date
+  const filteredPosts = useMemo(() => {
+    return [...posts].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [posts]);
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Simulate refresh - in production this would fetch from backend
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
-  const handleShare = async (post: typeof posts[0]) => {
+  const handleShare = async (post: (typeof posts)[0]) => {
     try {
       const result = await Share.share({
         message: `Check out ${post.caption.substring(0, 100)}... on Zovo!\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}\n\nFind skilled workers on Zovo!`,
@@ -237,7 +240,12 @@ export default function FeedScreen() {
           </Text>
         </Animated.View>
 
-        {filteredPosts.length === 0 ? (
+        {loading ? (
+          <View className="flex-1 items-center justify-center py-16">
+            <ActivityIndicator size="large" color="#059669" />
+            <Text className="text-gray-500 mt-4">Loading posts...</Text>
+          </View>
+        ) : filteredPosts.length === 0 ? (
           <Animated.View
             entering={FadeInDown}
             className="flex-1 items-center justify-center py-16"

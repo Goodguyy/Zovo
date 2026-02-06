@@ -26,6 +26,7 @@ import {
 import Animated, { FadeIn, FadeInDown, SlideInUp, FadeOut } from 'react-native-reanimated';
 import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS, generateId } from '@/lib/store';
 import { sendOTP, verifyOTP } from '@/lib/otp-service';
+import { createProfile, getProfileByPhone } from '@/lib/services/supabaseService';
 import { normalizePhoneNumber, detectNigerianCarrier, isBestBulkSMSConfigured } from '@/lib/bestbulksms';
 import { cn } from '@/lib/cn';
 
@@ -40,8 +41,6 @@ export default function AuthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const login = useAppStore((s) => s.login);
-  const addProfile = useAppStore((s) => s.addProfile);
-  const profiles = useAppStore((s) => s.profiles);
 
   // Flow state
   const [step, setStep] = useState<Step>('phone');
@@ -232,13 +231,20 @@ export default function AuthScreen() {
       setVerifiedUid(generatedUid);
 
       // Check if user already has a profile
-      const existingProfile = profiles.find(
-        (p) => p.phone === verifiedPhone
-      );
+      const existingProfile = await getProfileByPhone(verifiedPhone);
 
       if (existingProfile) {
         // Existing user - log them in
-        login(existingProfile);
+        login({
+          id: existingProfile.id,
+          phone: existingProfile.phone,
+          name: existingProfile.name,
+          whatsapp: existingProfile.whatsapp,
+          skills: existingProfile.skills,
+          area: existingProfile.area,
+          createdAt: existingProfile.created_at,
+          endorsementCount: existingProfile.total_endorsements,
+        });
         router.replace('/(tabs)');
       } else {
         // New user - collect profile info
@@ -295,7 +301,7 @@ export default function AuthScreen() {
     }
   };
 
-  const handleCreateProfile = () => {
+  const handleCreateProfile = async () => {
     setError(null);
 
     if (!name.trim()) {
@@ -319,20 +325,44 @@ export default function AuthScreen() {
       return;
     }
 
-    const newProfile = {
-      id: verifiedUid || generateId(),
-      phone: verifiedPhone,
-      name: name.trim(),
-      whatsapp: whatsapp || verifiedPhone,
-      skills: selectedSkills,
-      area: selectedArea,
-      createdAt: new Date().toISOString(),
-      endorsementCount: 0,
-    };
+    setIsLoading(true);
 
-    addProfile(newProfile);
-    login(newProfile);
-    router.replace('/(tabs)');
+    try {
+      const profileData = {
+        id: verifiedUid || generateId(),
+        phone: verifiedPhone,
+        name: name.trim(),
+        whatsapp: whatsapp || verifiedPhone,
+        skills: selectedSkills,
+        area: selectedArea,
+      };
+
+      const result = await createProfile(profileData);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create profile');
+      }
+
+      // Login with the local profile format
+      login({
+        id: profileData.id,
+        phone: profileData.phone,
+        name: profileData.name,
+        whatsapp: profileData.whatsapp,
+        skills: profileData.skills,
+        area: profileData.area,
+        createdAt: new Date().toISOString(),
+        endorsementCount: 0,
+      });
+      router.replace('/(tabs)');
+    } catch (err) {
+      setError({
+        message: err instanceof Error ? err.message : 'Failed to create profile. Please try again.',
+        type: 'error',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Error banner component

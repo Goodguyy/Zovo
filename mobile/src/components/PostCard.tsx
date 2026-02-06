@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import { Eye, Share2, MapPin, BadgeCheck, Heart } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, useAnimatedStyle, useSharedValue, withSpring, withSequence } from 'react-native-reanimated';
-import { Post, useAppStore, formatTimeAgo } from '@/lib/store';
+import { useAppStore, formatTimeAgo } from '@/lib/store';
+import { useSupabaseProfile, type AppPost } from '@/lib/hooks/useSupabaseData';
 import { useEngagement } from '@/lib/useEngagement';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
@@ -13,7 +14,7 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 32;
 
 interface PostCardProps {
-  post: Post;
+  post: AppPost;
   index?: number;
   onShare?: () => void;
   onVisible?: () => void;
@@ -21,14 +22,11 @@ interface PostCardProps {
 
 export function PostCard({ post, index = 0, onShare, onVisible }: PostCardProps) {
   const router = useRouter();
-  const profiles = useAppStore((s) => s.profiles);
   const currentUser = useAppStore((s) => s.currentUser);
   const hasTrackedView = useRef(false);
 
-  const profile = useMemo(
-    () => profiles.find((p) => p.id === post.userId),
-    [profiles, post.userId]
-  );
+  // Fetch profile from Supabase
+  const { profile } = useSupabaseProfile(post.userId);
 
   // Real-time engagement data
   const {
