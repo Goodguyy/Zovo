@@ -93,6 +93,7 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
 
     // Try Edge Function
     try {
+      console.log('[SMS] Calling Edge Function send-sms...');
       const { data, error } = await supabase.functions.invoke('send-sms', {
         body: {
           to: phoneNumber,
@@ -103,18 +104,34 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
         },
       });
 
-      if (!error && data?.success) {
+      console.log('[SMS] Edge Function response - data:', JSON.stringify(data));
+      console.log('[SMS] Edge Function response - error:', error ? JSON.stringify(error) : 'none');
+
+      if (error) {
+        console.log('[SMS] Edge Function returned error:', error.message);
+      } else if (data?.success) {
         console.log('[SMS] SUCCESS via Edge Function!');
         return {
           success: true,
           message: 'SMS sent successfully',
           response: data,
         };
+      } else {
+        console.log('[SMS] Edge Function returned:', JSON.stringify(data));
+        // Check if the SMS API returned a success even if data.success isn't true
+        if (data?.status === 'ok') {
+          console.log('[SMS] SMS API returned ok status');
+          return {
+            success: true,
+            message: 'SMS sent successfully',
+            response: data,
+          };
+        }
       }
 
-      console.log('[SMS] Edge Function failed, trying direct...');
+      console.log('[SMS] Edge Function did not succeed, trying direct...');
     } catch (edgeError) {
-      console.log('[SMS] Edge Function error, trying direct...');
+      console.log('[SMS] Edge Function exception:', edgeError);
     }
 
     // Fall back to direct API call (works on native/Android)
