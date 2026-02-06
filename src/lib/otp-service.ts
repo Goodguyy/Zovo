@@ -55,21 +55,31 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
     console.log('[OTP] Generating OTP for', normalizedPhone);
     const { data: generateResult, error: generateError } = await supabase.rpc(
       'generate_otp',
-      { p_phone_number: normalizedPhone }
+      { p_phone: normalizedPhone }
     );
 
-    if (generateError || !generateResult?.success) {
-      const errorMessage = generateResult?.error || generateError?.message || 'Failed to generate OTP';
+    // Function returns a table row with: success, otp_code, expires_at
+    if (generateError) {
       return {
         success: false,
-        error: errorMessage,
+        error: generateError.message || 'Failed to generate OTP',
       };
     }
 
-    console.log('[OTP] OTP generated, expires at:', generateResult.expires_at);
+    // Handle array response (table returns array) or single row
+    const result = Array.isArray(generateResult) ? generateResult[0] : generateResult;
+
+    if (!result?.success) {
+      return {
+        success: false,
+        error: 'Failed to generate OTP',
+      };
+    }
+
+    console.log('[OTP] OTP generated, expires at:', result.expires_at);
 
     // Step 2: Send OTP via SMS
-    const otpCode = generateResult.otp_code || generateResult.code;
+    const otpCode = result.otp_code;
 
     if (!otpCode) {
       console.warn('[OTP] No OTP code returned from Supabase');
@@ -98,8 +108,8 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
     return {
       success: true,
       message: 'OTP sent to your phone. It expires in 5 minutes.',
-      expires_at: generateResult.expires_at,
-      remaining_requests: generateResult.remaining || 2,
+      expires_at: result.expires_at,
+      remaining_requests: 2,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -118,23 +128,33 @@ export const sendOTPDemo = async (phoneNumber: string): Promise<SendOTPResponse>
   try {
     const { data: generateResult, error: generateError } = await supabase.rpc(
       'generate_otp',
-      { p_phone_number: phoneNumber }
+      { p_phone: phoneNumber }
     );
 
-    if (generateError || !generateResult?.success) {
+    if (generateError) {
       return {
         success: false,
-        error: generateResult?.error || 'Failed to generate OTP',
+        error: generateError.message || 'Failed to generate OTP',
+      };
+    }
+
+    // Handle array response (table returns array) or single row
+    const result = Array.isArray(generateResult) ? generateResult[0] : generateResult;
+
+    if (!result?.success) {
+      return {
+        success: false,
+        error: 'Failed to generate OTP',
       };
     }
 
     console.log('[OTP DEMO] OTP generated. In production, SMS would be sent.');
-    console.log('[OTP DEMO] For testing, use OTP code: 123456 (or any 6 digits)');
+    console.log('[OTP DEMO] For testing, use OTP code:', result.otp_code);
 
     return {
       success: true,
       message: 'OTP generated (demo mode). Check console for code. Expires in 5 minutes.',
-      expires_at: generateResult.expires_at,
+      expires_at: result.expires_at,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
