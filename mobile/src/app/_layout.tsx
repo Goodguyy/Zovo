@@ -2,7 +2,9 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { useColorScheme } from '@/lib/useColorScheme';
+import { useAppStore } from '@/lib/store';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -16,8 +18,8 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-// Custom light theme for HustleWall
-const HustleWallTheme = {
+// Custom light theme for Zovo
+const ZovoTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
@@ -30,8 +32,15 @@ const HustleWallTheme = {
 };
 
 function RootLayoutNav() {
+  // Initialize seed data on app load
+  const initializeSeedData = useAppStore((s) => s.initializeSeedData);
+
+  useEffect(() => {
+    initializeSeedData();
+  }, [initializeSeedData]);
+
   return (
-    <ThemeProvider value={HustleWallTheme}>
+    <ThemeProvider value={ZovoTheme}>
       <Stack
         screenOptions={{
           headerShown: false,
