@@ -35,6 +35,9 @@ export interface VerifyOTPResponse {
  */
 export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse> => {
   try {
+    console.log('[OTP] === Starting sendOTP ===');
+    console.log('[OTP] Phone input:', request.phone_number);
+
     // Validate phone number
     const normalizedPhone = normalizePhoneNumber(request.phone_number);
     if (!normalizedPhone) {
@@ -44,12 +47,19 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
       };
     }
 
+    console.log('[OTP] Normalized phone:', normalizedPhone);
+
     // Check if BestBulkSMS is configured
-    if (!isBestBulkSMSConfigured()) {
+    const smsConfigured = isBestBulkSMSConfigured();
+    console.log('[OTP] BestBulkSMS configured:', smsConfigured);
+
+    if (!smsConfigured) {
       console.warn('[OTP] BestBulkSMS not configured. Using demo mode.');
       // In demo mode, just generate OTP without sending SMS
       return sendOTPDemo(normalizedPhone);
     }
+
+    console.log('[OTP] SMS is configured, will attempt to send real SMS');
 
     // Step 1: Generate OTP in Supabase
     console.log('[OTP] Generating OTP for', normalizedPhone);
@@ -90,6 +100,7 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
     }
 
     console.log('[OTP] Sending OTP via SMS...');
+    console.log('[OTP] Calling sendOTPSMS with phone:', normalizedPhone, 'code:', otpCode);
     let smsResult: any = null;
 
     try {
