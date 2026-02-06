@@ -73,23 +73,32 @@ export default function AuthScreen() {
   // Helper function to format phone number for Nigerian users
   const formatNigerianPhone = (input: string): string => {
     const digits = input.replace(/\D/g, '');
+
+    // If user entered just the local part (e.g., 8123456789 or 08123456789)
+    if (digits.startsWith('0') && digits.length === 11) {
+      return `+234${digits.slice(1)}`;
+    }
+    // If user entered without leading 0 (e.g., 8123456789)
+    if (digits.length === 10) {
+      return `+234${digits}`;
+    }
+    // If already has 234 prefix
     if (digits.startsWith('234') && digits.length === 13) {
       return `+${digits}`;
-    } else if (digits.startsWith('0') && digits.length === 11) {
-      return `+234${digits.slice(1)}`;
-    } else if (digits.length === 10 && !digits.startsWith('0')) {
+    }
+    // For shorter inputs, assume it's the local number part
+    if (digits.length < 11 && !digits.startsWith('234')) {
       return `+234${digits}`;
     }
-    if (!digits.startsWith('234')) {
-      return `+234${digits}`;
-    }
-    return `+${digits}`;
+
+    return `+234${digits}`;
   };
 
   // Validate Nigerian phone number
   const isValidNigerianPhone = (phone: string): boolean => {
     const formatted = formatNigerianPhone(phone);
-    return /^\+234[789][01][0-9]{8}$/.test(formatted);
+    // Nigerian numbers: +234 followed by 10 digits starting with 7, 8, or 9
+    return /^\+234[789][0-9]{9}$/.test(formatted);
   };
 
   // Update carrier hint as user types
