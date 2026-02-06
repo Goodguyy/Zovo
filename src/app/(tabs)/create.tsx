@@ -98,6 +98,7 @@ export default function CreatePostScreen() {
       skills: selectedSkills,
       area: selectedArea,
       viewCount: 0,
+      shareCount: 0,
       createdAt: new Date().toISOString(),
     };
 

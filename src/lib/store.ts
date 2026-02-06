@@ -12,6 +12,7 @@ export interface Post {
   skills: string[];
   area: string;
   viewCount: number;
+  shareCount: number;
   createdAt: string;
 }
 
@@ -50,6 +51,7 @@ interface AppState {
   logout: () => void;
   addPost: (post: Post) => void;
   incrementViewCount: (postId: string) => void;
+  incrementShareCount: (postId: string) => void;
   addProfile: (profile: Profile) => void;
   updateProfile: (userId: string, updates: Partial<Profile>) => void;
   addEndorsement: (endorsement: Endorsement) => void;
@@ -192,6 +194,7 @@ const generateMockData = () => {
       skills: ['Electrician'],
       area: 'Lekki',
       viewCount: 234,
+      shareCount: 12,
       createdAt: '2024-12-01T15:30:00Z',
     },
     {
@@ -203,6 +206,7 @@ const generateMockData = () => {
       skills: ['Makeup Artist', 'Hair Stylist'],
       area: 'Victoria Island',
       viewCount: 567,
+      shareCount: 45,
       createdAt: '2024-12-02T10:00:00Z',
     },
     {
@@ -214,6 +218,7 @@ const generateMockData = () => {
       skills: ['Plumber', 'Tiler'],
       area: 'Ikeja',
       viewCount: 189,
+      shareCount: 8,
       createdAt: '2024-12-03T14:20:00Z',
     },
     {
@@ -225,6 +230,7 @@ const generateMockData = () => {
       skills: ['Tailor', 'Fashion Designer'],
       area: 'Surulere',
       viewCount: 412,
+      shareCount: 23,
       createdAt: '2024-12-04T09:45:00Z',
     },
     {
@@ -236,6 +242,7 @@ const generateMockData = () => {
       skills: ['Auto Mechanic'],
       area: 'Yaba',
       viewCount: 321,
+      shareCount: 15,
       createdAt: '2024-12-05T16:00:00Z',
     },
     {
@@ -247,6 +254,7 @@ const generateMockData = () => {
       skills: ['AC Technician'],
       area: 'Lekki',
       viewCount: 156,
+      shareCount: 7,
       createdAt: '2024-12-06T11:30:00Z',
     },
   ];
@@ -303,6 +311,12 @@ export const useAppStore = create<AppState>()(
       incrementViewCount: (postId) => set((state) => ({
         posts: state.posts.map((p) =>
           p.id === postId ? { ...p, viewCount: p.viewCount + 1 } : p
+        ),
+      })),
+
+      incrementShareCount: (postId) => set((state) => ({
+        posts: state.posts.map((p) =>
+          p.id === postId ? { ...p, shareCount: p.shareCount + 1 } : p
         ),
       })),
 

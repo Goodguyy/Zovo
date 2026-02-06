@@ -73,12 +73,22 @@ export function PostCard({ post, index = 0, onShare }: PostCardProps) {
               }}
             />
 
-            {/* View count badge */}
-            <View className="absolute top-3 right-3 bg-black/50 rounded-full px-3 py-1.5 flex-row items-center">
-              <Eye size={14} color="#fff" />
-              <Text className="text-white text-xs font-medium ml-1.5">
-                {post.viewCount.toLocaleString()}
-              </Text>
+            {/* View and share count badges */}
+            <View className="absolute top-3 right-3 flex-row gap-2">
+              <View className="bg-black/50 rounded-full px-2.5 py-1.5 flex-row items-center">
+                <Eye size={12} color="#fff" />
+                <Text className="text-white text-xs font-medium ml-1">
+                  {post.viewCount.toLocaleString()}
+                </Text>
+              </View>
+              {post.shareCount > 0 && (
+                <View className="bg-black/50 rounded-full px-2.5 py-1.5 flex-row items-center">
+                  <Share2 size={12} color="#fff" />
+                  <Text className="text-white text-xs font-medium ml-1">
+                    {post.shareCount}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Skills tags on image */}

@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const posts = useAppStore((s) => s.posts);
+  const incrementShareCount = useAppStore((s) => s.incrementShareCount);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
@@ -31,10 +32,13 @@ export default function FeedScreen() {
 
   const handleShare = async (post: typeof posts[0]) => {
     try {
-      await Share.share({
+      const result = await Share.share({
         message: `Check out ${post.caption.substring(0, 100)}... on HustleWall!\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}`,
         title: 'Share on WhatsApp',
       });
+      if (result.action === Share.sharedAction) {
+        incrementShareCount(post.id);
+      }
     } catch (error) {
       console.log('Share error:', error);
     }

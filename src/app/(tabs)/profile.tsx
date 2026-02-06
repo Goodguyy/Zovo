@@ -194,15 +194,21 @@ export default function ProfileTabScreen() {
           </View>
 
           {userPosts.length === 0 ? (
-            <View className="bg-white rounded-xl p-6 items-center">
-              <Text className="text-gray-400 text-center mb-3">
-                You haven't posted any work yet
+            <View className="bg-gradient-to-br from-emerald-50 to-amber-50 rounded-xl p-6 items-center border border-emerald-100">
+              <View className="w-16 h-16 rounded-full bg-emerald-100 items-center justify-center mb-3">
+                <Text className="text-3xl">📸</Text>
+              </View>
+              <Text className="text-gray-900 font-bold text-lg mb-1">
+                Activate Your Profile!
+              </Text>
+              <Text className="text-gray-500 text-center text-sm mb-4">
+                Post your first work to show customers what you can do. Your profile becomes visible once you post.
               </Text>
               <Pressable
                 onPress={() => router.push('/(tabs)/create')}
-                className="bg-emerald-500 rounded-full px-6 py-2.5"
+                className="bg-emerald-500 rounded-full px-6 py-3 active:bg-emerald-600"
               >
-                <Text className="text-white font-semibold">Post Your Work</Text>
+                <Text className="text-white font-bold">Post Your First Work</Text>
               </Pressable>
             </View>
           ) : (
@@ -310,6 +316,20 @@ export default function ProfileTabScreen() {
             <LogOut size={18} color="#ef4444" />
             <Text className="text-red-500 font-medium ml-2">Log Out</Text>
           </Pressable>
+        </Animated.View>
+
+        {/* Disclaimer */}
+        <Animated.View
+          entering={FadeInDown.delay(400)}
+          className="mx-4 mt-4 mb-4"
+        >
+          <View className="bg-gray-100 rounded-xl p-4">
+            <Text className="text-gray-500 text-xs text-center leading-5">
+              Public showcase only. All contact happens outside HustleWall.
+              Meet in safe locations and agree on terms before work begins.
+              We do not process payments or verify workers.
+            </Text>
+          </View>
         </Animated.View>
       </ScrollView>
     </View>
