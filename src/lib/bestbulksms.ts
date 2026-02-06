@@ -59,45 +59,69 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
 
     const smsPayload = {
       to: phoneNumber,
-      body: request.message,
-      from: request.sender_id || BESTBULKSMS_SENDER_ID,
+      message: request.message,
+      sender_id: request.sender_id || BESTBULKSMS_SENDER_ID,
       api_key: BESTBULKSMS_API_KEY,
-      api_url: BESTBULKSMS_API_URL,
     };
 
     console.log('[SMS] Sending to:', phoneNumber);
-    console.log('[SMS] From:', smsPayload.from);
+    console.log('[SMS] From:', smsPayload.sender_id);
 
-    // Try to send via Supabase Edge Function first (works on web)
-    console.log('[SMS] Calling Supabase send_sms function...');
+    // Try to send via Supabase RPC function (works on web)
+    console.log('[SMS] Calling Supabase send_sms_via_api function...');
 
-    const { data, error } = await supabase.functions.invoke('send-sms', {
-      body: smsPayload,
-    });
+    try {
+      const { data, error } = await supabase.rpc('send_sms_via_api', {
+        p_to: phoneNumber,
+        p_message: request.message,
+        p_sender_id: smsPayload.sender_id,
+      });
 
-    if (error) {
-      console.log('[SMS] Supabase function error:', error.message);
-      // Fall back to direct API call (works on native/Android)
-      return sendSMSDirect(request);
+      if (!error && data?.success) {
+        console.log('[SMS] SUCCESS via Supabase RPC!');
+        return {
+          success: true,
+          message: 'SMS sent successfully',
+          response: data,
+        };
+      }
+
+      console.log('[SMS] Supabase RPC failed, trying Edge Function...');
+    } catch (rpcError) {
+      console.log('[SMS] RPC error, trying Edge Function...');
     }
 
-    console.log('[SMS] Supabase function response:', JSON.stringify(data));
+    // Try Edge Function
+    try {
+      const { data, error } = await supabase.functions.invoke('send-sms', {
+        body: {
+          to: phoneNumber,
+          body: request.message,
+          from: smsPayload.sender_id,
+          api_key: BESTBULKSMS_API_KEY,
+          api_url: BESTBULKSMS_API_URL,
+        },
+      });
 
-    if (data?.success) {
-      console.log('[SMS] SUCCESS! SMS sent via Supabase');
-      return {
-        success: true,
-        message: 'SMS sent successfully',
-        response: data,
-      };
-    } else {
-      console.log('[SMS] Supabase function returned error, trying direct...');
-      return sendSMSDirect(request);
+      if (!error && data?.success) {
+        console.log('[SMS] SUCCESS via Edge Function!');
+        return {
+          success: true,
+          message: 'SMS sent successfully',
+          response: data,
+        };
+      }
+
+      console.log('[SMS] Edge Function failed, trying direct...');
+    } catch (edgeError) {
+      console.log('[SMS] Edge Function error, trying direct...');
     }
+
+    // Fall back to direct API call (works on native/Android)
+    return sendSMSDirect(request);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.log('[SMS] Error, trying direct call:', errorMessage);
-    // Fall back to direct API call
     return sendSMSDirect(request);
   }
 };
