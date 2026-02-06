@@ -61,22 +61,23 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
       };
     }
 
-    // Prepare request body
-    const body = new URLSearchParams();
-    body.append('api_key', BESTBULKSMS_API_KEY);
-    body.append('to', phoneNumber);
-    body.append('body', request.message);
-    body.append('from', request.sender_id || BESTBULKSMS_SENDER_ID);
+    // Prepare JSON request body
+    const body = {
+      to: phoneNumber,
+      body: request.message,
+      from: request.sender_id || BESTBULKSMS_SENDER_ID,
+    };
 
     console.log(`[SMS] Sending to ${phoneNumber}...`);
 
-    // Make API request
+    // Make API request with Bearer auth
     const response = await fetch(BESTBULKSMS_API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Bearer ${BESTBULKSMS_API_KEY}`,
+        'Content-Type': 'application/json',
       },
-      body: body.toString(),
+      body: JSON.stringify(body),
     });
 
     const responseData = await response.json();
