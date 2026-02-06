@@ -12,6 +12,7 @@ A mobile-first proof-of-work showcase app for Nigerian informal workers. Workers
 - **Endorsements**: Soft endorsements from satisfied customers, traceable to endorser's profile
 - **Contact Options**: WhatsApp click-to-chat and direct phone call buttons
 - **Sharing**: Share posts to WhatsApp, Status, and other apps for viral growth
+- **Real-Time Engagement**: Live tracking of views, shares, and endorsements
 
 ### Safety Features
 - No precise location sharing - only broad area displayed
@@ -29,6 +30,80 @@ A mobile-first proof-of-work showcase app for Nigerian informal workers. Workers
 7. Leave endorsements after work completed
 8. Share posts to drive organic growth
 
+## Real-Time Engagement Tracking
+
+HustleWall includes a comprehensive real-time engagement tracking system that records and displays live metrics for all user interactions.
+
+### Features
+- **Post Views**: Tracks unique views per user with 30-minute cooldown to prevent inflation
+- **Post Shares**: Records each share action with platform info (WhatsApp, link, other)
+- **Endorsements**: One endorsement per user per post, prevents self-endorsement
+- **Live Updates**: All metrics update in real-time across feed, post details, and profiles
+- **Animated Feedback**: Visual pulse animations when metrics change
+
+### Database Structure
+
+```typescript
+// Engagement tracking structure
+interface ViewRecord {
+  postId: string;
+  userId: string;
+  timestamp: number;
+  deviceId?: string;  // For fraud prevention
+}
+
+interface ShareRecord {
+  postId: string;
+  userId: string;
+  timestamp: number;
+  platform: 'whatsapp' | 'link' | 'other';
+}
+
+interface EndorsementRecord {
+  id: string;
+  postId: string;
+  fromUserId: string;
+  toUserId: string;
+  message: string;
+  timestamp: number;
+}
+```
+
+### Fraud Prevention
+- **30-minute view cooldown**: Same user can't inflate view count repeatedly
+- **One endorsement per post**: Users can only endorse a post once
+- **No self-endorsement**: Users cannot endorse their own work
+- **Device fingerprinting**: Optional device ID tracking for additional verification
+- **Rate limiting**: Maximum 100 views per user per hour
+
+### Analytics Available
+- Unique viewers count (distinct users who viewed a post)
+- Recent views (last 24 hours)
+- Popular posts ranking (weighted by views, shares, endorsements)
+- User engagement stats (total views, shares, endorsements across all posts)
+
+### Usage in Components
+
+```typescript
+// Hook for real-time engagement data
+const {
+  viewCount,
+  shareCount,
+  endorsementCount,
+  endorsements,
+  uniqueViewers,
+  recentViews24h,
+  canUserEndorse,
+  hasEndorsed,
+  trackView,
+  trackShare,
+  submitEndorsement,
+} = useEngagement(postId, postOwnerId);
+
+// Hook for user profile stats
+const { totalViews, totalShares, totalEndorsements } = useEngagementStats(userId);
+```
+
 ## Technical Architecture
 
 ### Database Structure
@@ -44,6 +119,7 @@ interface Post {
   skills: string[];      // e.g., ['Electrician', 'AC Technician']
   area: string;          // e.g., 'Lekki'
   viewCount: number;
+  shareCount: number;
   createdAt: string;
 }
 
@@ -78,27 +154,31 @@ src/
 │   ├── _layout.tsx          # Root layout with navigation
 │   ├── (tabs)/
 │   │   ├── _layout.tsx      # Tab navigator
-│   │   ├── index.tsx        # Feed screen
+│   │   ├── index.tsx        # Feed screen with real-time updates
 │   │   ├── create.tsx       # Post creation
-│   │   └── profile.tsx      # User's own profile
+│   │   └── profile.tsx      # User's own profile with live stats
 │   ├── auth.tsx             # Phone + OTP auth
-│   ├── post/[id].tsx        # Post detail with endorsements
+│   ├── post/[id].tsx        # Post detail with live engagement
 │   ├── profile/[id].tsx     # Worker profile view
 │   └── settings.tsx         # App settings
 ├── components/
-│   └── PostCard.tsx         # Feed post card component
+│   └── PostCard.tsx         # Feed post card with live metrics
 └── lib/
     ├── store.ts             # Zustand store with mock data
+    ├── engagement.ts        # Real-time engagement tracking service
+    ├── useEngagement.ts     # React hooks for engagement data
+    ├── firebase-mock.ts     # Mock Firebase for development
     └── cn.ts                # Tailwind class merge utility
 ```
 
 ## Screens Overview
 
 ### Feed (Home Tab)
-- Green header with HustleWall branding
+- Green header with HustleWall branding and "Live" indicator
 - Filter button to show/hide area and skill filters
 - Pull-to-refresh functionality
-- Post cards with media, skills, profile info, and share button
+- Post cards with live view/share/endorsement counts
+- Animated metric updates with haptic feedback
 - Safety disclaimer at bottom
 
 ### Post Creation (Create Tab)
@@ -109,7 +189,9 @@ src/
 - Privacy notice about location
 
 ### Profile (Profile Tab)
-- User stats: posts, endorsements, total views
+- Real-time user stats: views, shares, endorsements
+- Animated stat updates with visual feedback
+- "Live" indicator showing real-time tracking
 - Recent posts horizontal scroll
 - Recent endorsements received
 - Account age display
@@ -118,13 +200,16 @@ src/
 ### Post Detail
 - Full-size media
 - Skills and caption
+- Live engagement stats (views, shares, endorsements)
+- Unique viewers and 24h views analytics
 - Worker profile link
 - WhatsApp and Call contact buttons
-- Endorsement form and list
+- Endorsement form (with duplicate prevention)
+- Endorsement list with timestamps
 - Safety tips
 
 ### Worker Profile View
-- Profile card with stats
+- Profile card with real-time stats
 - Contact buttons
 - Complete work history
 - Endorsements received (traceable)
@@ -189,6 +274,7 @@ To enable real SMS OTP verification:
 - **Zero Capital**: Free to use, grows organically
 - **Trust Building**: Traceable endorsements, view counts, account age
 - **Safety First**: No precise locations, clear disclaimers
+- **Real-Time**: Live engagement tracking builds trust and excitement
 
 ## Color Palette
 
@@ -225,3 +311,27 @@ Events: Photographer, Videographer, DJ, Event Planner, Decorator
 4. **No payment processing**: Direct WhatsApp/phone contact between parties
 5. **User-generated content**: Workers create their own marketing material
 6. **Viral mechanics**: View counts, shareable posts, endorsement chains
+7. **Real-time engagement**: Live tracking creates excitement and trust
+
+## Production Backend (Future)
+
+For production-scale deployment with real-time sync across devices:
+
+1. **Firebase Realtime Database or Firestore**
+   - Replace AsyncStorage with Firebase SDK
+   - Enable real-time listeners for cross-device sync
+   - Use Firebase Security Rules for fraud prevention
+
+2. **Recommended Structure**
+   ```
+   /posts/{postId}
+   /profiles/{userId}
+   /engagement/views/{postId}/{odifiedUserId}
+   /engagement/shares/{postId}/{shareId}
+   /engagement/endorsements/{postId}/{fromUserId}
+   ```
+
+3. **Security Rules**
+   - Validate view cooldowns server-side
+   - Enforce one endorsement per user per post
+   - Rate limit write operations

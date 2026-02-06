@@ -8,7 +8,7 @@ import {
   Share,
   Linking,
   TextInput,
-  Alert,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,39 +23,111 @@ import {
   Star,
   Clock,
   ChevronRight,
+  TrendingUp,
+  Users,
+  AlertCircle,
+  X,
+  Heart,
 } from 'lucide-react-native';
-import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { useAppStore, formatTimeAgo, generateId } from '@/lib/store';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
+import { useAppStore, formatTimeAgo } from '@/lib/store';
+import { useEngagement } from '@/lib/useEngagement';
 import { cn } from '@/lib/cn';
+import * as Haptics from 'expo-haptics';
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const hasIncrementedView = useRef(false);
 
   const posts = useAppStore((s) => s.posts);
   const profiles = useAppStore((s) => s.profiles);
-  const endorsements = useAppStore((s) => s.endorsements);
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
-  const addEndorsement = useAppStore((s) => s.addEndorsement);
-  const incrementViewCount = useAppStore((s) => s.incrementViewCount);
 
   const post = posts.find((p) => p.id === id);
   const profile = post ? profiles.find((p) => p.id === post.userId) : null;
-  const postEndorsements = endorsements.filter((e) => e.postId === id);
 
-  // Increment view count only once when post detail is opened
+  // Real-time engagement tracking
+  const {
+    viewCount,
+    shareCount,
+    endorsementCount,
+    endorsements,
+    uniqueViewers,
+    recentViews24h,
+    canUserEndorse,
+    hasEndorsed,
+    endorseBlockReason,
+    trackView,
+    trackShare,
+    submitEndorsement,
+  } = useEngagement(id ?? '', post?.userId);
+
+  // Track view on mount
   useEffect(() => {
-    if (id && !hasIncrementedView.current) {
-      hasIncrementedView.current = true;
-      incrementViewCount(id);
+    if (id && currentUser?.id) {
+      trackView();
     }
-  }, [id]);
+  }, [id, currentUser?.id, trackView]);
 
   const [showEndorseForm, setShowEndorseForm] = useState(false);
   const [endorseMessage, setEndorseMessage] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Animation values for live metrics
+  const viewScale = useSharedValue(1);
+  const shareScale = useSharedValue(1);
+  const endorseScale = useSharedValue(1);
+
+  const prevViewCount = useRef(viewCount);
+  const prevShareCount = useRef(shareCount);
+  const prevEndorseCount = useRef(endorsementCount);
+
+  useEffect(() => {
+    if (viewCount > prevViewCount.current) {
+      viewScale.value = withSequence(withSpring(1.2), withSpring(1));
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    prevViewCount.current = viewCount;
+  }, [viewCount, viewScale]);
+
+  useEffect(() => {
+    if (shareCount > prevShareCount.current) {
+      shareScale.value = withSequence(withSpring(1.2), withSpring(1));
+    }
+    prevShareCount.current = shareCount;
+  }, [shareCount, shareScale]);
+
+  useEffect(() => {
+    if (endorsementCount > prevEndorseCount.current) {
+      endorseScale.value = withSequence(withSpring(1.2), withSpring(1));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    prevEndorseCount.current = endorsementCount;
+  }, [endorsementCount, endorseScale]);
+
+  const viewAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: viewScale.value }],
+  }));
+
+  const shareAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: shareScale.value }],
+  }));
+
+  const endorseAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: endorseScale.value }],
+  }));
 
   if (!post || !profile) {
     return (
@@ -67,9 +139,13 @@ export default function PostDetailScreen() {
 
   const handleShare = async () => {
     try {
-      await Share.share({
+      const result = await Share.share({
         message: `Check out ${profile.name}'s work on HustleWall!\n\n"${post.caption.substring(0, 150)}..."\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}\n\nFind skilled workers on HustleWall!`,
       });
+      if (result.action === Share.sharedAction) {
+        await trackShare('other');
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
     } catch (error) {
       console.log('Share error:', error);
     }
@@ -86,44 +162,45 @@ export default function PostDetailScreen() {
     Linking.openURL(`tel:${profile.phone}`);
   };
 
-  const handleEndorse = () => {
+  const handleEndorse = async () => {
     if (!isAuthenticated || !currentUser) {
       router.push('/auth');
       return;
     }
 
-    if (currentUser.id === profile.id) {
-      Alert.alert('Oops', "You can't endorse your own work");
+    if (!canUserEndorse) {
+      setErrorMessage(endorseBlockReason || "You can't endorse this post");
+      setShowErrorModal(true);
       return;
     }
 
     if (!endorseMessage.trim()) {
-      Alert.alert('Add a message', 'Please write something about this worker');
+      setErrorMessage('Please write something about this worker');
+      setShowErrorModal(true);
       return;
     }
 
-    const newEndorsement = {
-      id: generateId(),
-      fromUserId: currentUser.id,
-      toUserId: profile.id,
-      postId: post.id,
-      message: endorseMessage.trim(),
-      createdAt: new Date().toISOString(),
-    };
+    setIsSubmitting(true);
+    const result = await submitEndorsement(endorseMessage.trim());
+    setIsSubmitting(false);
 
-    addEndorsement(newEndorsement);
-    setEndorseMessage('');
-    setShowEndorseForm(false);
-    Alert.alert('Thank you!', 'Your endorsement has been added');
+    if (result.success) {
+      setEndorseMessage('');
+      setShowEndorseForm(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      setErrorMessage(result.error || 'Failed to submit endorsement');
+      setShowErrorModal(true);
+    }
   };
+
+  // Use real-time counts with fallback
+  const displayViewCount = viewCount || post.viewCount;
+  const displayShareCount = shareCount || post.shareCount;
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: false,
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
       <View className="flex-1 bg-gray-50">
         {/* Image header */}
         <View className="relative">
@@ -151,12 +228,38 @@ export default function PostDetailScreen() {
             <Share2 size={20} color="#fff" />
           </Pressable>
 
-          {/* View count */}
-          <View className="absolute bottom-4 right-4 bg-black/50 rounded-full px-3 py-1.5 flex-row items-center">
-            <Eye size={14} color="#fff" />
-            <Text className="text-white text-sm font-medium ml-1.5">
-              {post.viewCount.toLocaleString()} views
-            </Text>
+          {/* Live engagement stats */}
+          <View className="absolute bottom-4 left-4 right-4 flex-row gap-2">
+            <Animated.View style={viewAnimatedStyle}>
+              <View className="bg-black/60 rounded-full px-3 py-1.5 flex-row items-center">
+                <Eye size={14} color="#fff" />
+                <Text className="text-white text-sm font-medium ml-1.5">
+                  {displayViewCount.toLocaleString()}
+                </Text>
+              </View>
+            </Animated.View>
+
+            {displayShareCount > 0 && (
+              <Animated.View style={shareAnimatedStyle}>
+                <View className="bg-black/60 rounded-full px-3 py-1.5 flex-row items-center">
+                  <Share2 size={14} color="#fff" />
+                  <Text className="text-white text-sm font-medium ml-1.5">
+                    {displayShareCount}
+                  </Text>
+                </View>
+              </Animated.View>
+            )}
+
+            {endorsementCount > 0 && (
+              <Animated.View style={endorseAnimatedStyle}>
+                <View className="bg-amber-500 rounded-full px-3 py-1.5 flex-row items-center">
+                  <Heart size={14} color="#fff" fill="#fff" />
+                  <Text className="text-white text-sm font-medium ml-1.5">
+                    {endorsementCount}
+                  </Text>
+                </View>
+              </Animated.View>
+            )}
           </View>
         </View>
 
@@ -198,6 +301,39 @@ export default function PostDetailScreen() {
               <Text className="text-gray-500 text-sm ml-1">
                 {formatTimeAgo(post.createdAt)}
               </Text>
+            </View>
+          </Animated.View>
+
+          {/* Live engagement insights */}
+          <Animated.View
+            entering={FadeInDown.delay(50)}
+            className="mx-4 mt-4"
+          >
+            <Text className="text-gray-900 font-bold text-lg mb-3">
+              Live Engagement
+            </Text>
+            <View className="bg-white rounded-xl p-4">
+              <View className="flex-row">
+                <View className="flex-1 items-center py-2">
+                  <View className="flex-row items-center mb-1">
+                    <Users size={16} color="#059669" />
+                    <Text className="text-gray-900 text-xl font-bold ml-1.5">
+                      {uniqueViewers}
+                    </Text>
+                  </View>
+                  <Text className="text-gray-500 text-xs">Unique viewers</Text>
+                </View>
+                <View className="w-px bg-gray-100" />
+                <View className="flex-1 items-center py-2">
+                  <View className="flex-row items-center mb-1">
+                    <TrendingUp size={16} color="#059669" />
+                    <Text className="text-gray-900 text-xl font-bold ml-1.5">
+                      {recentViews24h}
+                    </Text>
+                  </View>
+                  <Text className="text-gray-500 text-xs">Views (24h)</Text>
+                </View>
+              </View>
             </View>
           </Animated.View>
 
@@ -271,16 +407,35 @@ export default function PostDetailScreen() {
           >
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-gray-900 font-bold text-lg">
-                Endorsements ({postEndorsements.length})
+                Endorsements ({endorsementCount})
               </Text>
               {!showEndorseForm && (
                 <Pressable
-                  onPress={() => setShowEndorseForm(true)}
-                  className="bg-amber-100 rounded-full px-4 py-2 flex-row items-center"
+                  onPress={() => {
+                    if (!isAuthenticated) {
+                      router.push('/auth');
+                      return;
+                    }
+                    if (!canUserEndorse) {
+                      setErrorMessage(endorseBlockReason || "You can't endorse this post");
+                      setShowErrorModal(true);
+                      return;
+                    }
+                    setShowEndorseForm(true);
+                  }}
+                  className={cn(
+                    "rounded-full px-4 py-2 flex-row items-center",
+                    hasEndorsed ? "bg-gray-100" : "bg-amber-100"
+                  )}
                 >
-                  <Star size={16} color="#f59e0b" />
-                  <Text className="text-amber-700 font-medium ml-1.5">
-                    Endorse
+                  <Star size={16} color={hasEndorsed ? "#9ca3af" : "#f59e0b"} />
+                  <Text
+                    className={cn(
+                      "font-medium ml-1.5",
+                      hasEndorsed ? "text-gray-400" : "text-amber-700"
+                    )}
+                  >
+                    {hasEndorsed ? "Endorsed" : "Endorse"}
                   </Text>
                 </Pressable>
               )}
@@ -317,9 +472,15 @@ export default function PostDetailScreen() {
                   </Pressable>
                   <Pressable
                     onPress={handleEndorse}
-                    className="flex-1 bg-amber-500 rounded-lg py-2.5 items-center"
+                    disabled={isSubmitting}
+                    className={cn(
+                      "flex-1 rounded-lg py-2.5 items-center",
+                      isSubmitting ? "bg-amber-300" : "bg-amber-500"
+                    )}
                   >
-                    <Text className="text-white font-medium">Submit</Text>
+                    <Text className="text-white font-medium">
+                      {isSubmitting ? "Submitting..." : "Submit"}
+                    </Text>
                   </Pressable>
                 </View>
                 <Text className="text-amber-600 text-xs mt-2 text-center">
@@ -328,7 +489,7 @@ export default function PostDetailScreen() {
               </Animated.View>
             )}
 
-            {postEndorsements.length === 0 && !showEndorseForm ? (
+            {endorsements.length === 0 && !showEndorseForm ? (
               <View className="bg-white rounded-xl p-6 items-center">
                 <Star size={32} color="#d1d5db" />
                 <Text className="text-gray-400 text-center mt-2">
@@ -337,7 +498,7 @@ export default function PostDetailScreen() {
               </View>
             ) : (
               <View className="bg-white rounded-xl overflow-hidden">
-                {postEndorsements.map((endorsement, index) => {
+                {endorsements.map((endorsement, index) => {
                   const endorser = profiles.find(
                     (p) => p.id === endorsement.fromUserId
                   );
@@ -365,7 +526,7 @@ export default function PostDetailScreen() {
                           "{endorsement.message}"
                         </Text>
                         <Text className="text-gray-400 text-xs mt-1">
-                          {formatTimeAgo(endorsement.createdAt)}
+                          {formatTimeAgo(new Date(endorsement.timestamp).toISOString())}
                         </Text>
                       </View>
                     </Pressable>
@@ -388,6 +549,35 @@ export default function PostDetailScreen() {
             </Text>
           </View>
         </ScrollView>
+
+        {/* Error Modal */}
+        <Modal
+          visible={showErrorModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowErrorModal(false)}
+        >
+          <Pressable
+            className="flex-1 bg-black/50 items-center justify-center"
+            onPress={() => setShowErrorModal(false)}
+          >
+            <View className="bg-white rounded-2xl p-6 mx-6 max-w-sm w-full">
+              <View className="flex-row items-center mb-3">
+                <AlertCircle size={24} color="#ef4444" />
+                <Text className="text-gray-900 font-bold text-lg ml-2">
+                  Oops!
+                </Text>
+              </View>
+              <Text className="text-gray-600 mb-4">{errorMessage}</Text>
+              <Pressable
+                onPress={() => setShowErrorModal(false)}
+                className="bg-gray-100 rounded-lg py-3 items-center"
+              >
+                <Text className="text-gray-700 font-medium">Got it</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
       </View>
     </>
   );

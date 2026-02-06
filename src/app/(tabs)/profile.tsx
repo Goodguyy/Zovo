@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,13 +10,24 @@ import {
   Clock,
   Star,
   ChevronRight,
-  MessageCircle,
-  Phone,
   LogOut,
+  Eye,
+  Share2,
+  TrendingUp,
 } from 'lucide-react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
 import { useAppStore, formatAccountAge, formatTimeAgo } from '@/lib/store';
+import { useEngagementStats } from '@/lib/useEngagement';
+import { getUserEndorsementsReceived, subscribeToEngagement } from '@/lib/engagement';
 import { cn } from '@/lib/cn';
+import * as Haptics from 'expo-haptics';
 
 export default function ProfileTabScreen() {
   const insets = useSafeAreaInsets();
@@ -24,16 +35,64 @@ export default function ProfileTabScreen() {
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const posts = useAppStore((s) => s.posts);
-  const endorsements = useAppStore((s) => s.endorsements);
   const logout = useAppStore((s) => s.logout);
+  const profiles = useAppStore((s) => s.profiles);
 
   const userPosts = currentUser
     ? posts.filter((p) => p.userId === currentUser.id)
     : [];
-  const userEndorsements = currentUser
-    ? endorsements.filter((e) => e.toUserId === currentUser.id)
-    : [];
-  const totalViews = userPosts.reduce((sum, p) => sum + p.viewCount, 0);
+
+  // Real-time engagement stats
+  const engagementStats = useEngagementStats(currentUser?.id ?? '');
+
+  // Get real-time endorsements
+  const [userEndorsements, setUserEndorsements] = useState(
+    currentUser ? getUserEndorsementsReceived(currentUser.id) : []
+  );
+
+  // Subscribe to engagement updates
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const unsubscribe = subscribeToEngagement(() => {
+      setUserEndorsements(getUserEndorsementsReceived(currentUser.id));
+    });
+
+    return () => unsubscribe();
+  }, [currentUser?.id]);
+
+  // Animation for stats
+  const viewScale = useSharedValue(1);
+  const shareScale = useSharedValue(1);
+  const endorseScale = useSharedValue(1);
+
+  const [prevStats, setPrevStats] = useState(engagementStats);
+
+  useEffect(() => {
+    if (engagementStats.totalViews > prevStats.totalViews) {
+      viewScale.value = withSequence(withSpring(1.15), withSpring(1));
+    }
+    if (engagementStats.totalShares > prevStats.totalShares) {
+      shareScale.value = withSequence(withSpring(1.15), withSpring(1));
+    }
+    if (engagementStats.totalEndorsements > prevStats.totalEndorsements) {
+      endorseScale.value = withSequence(withSpring(1.15), withSpring(1));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setPrevStats(engagementStats);
+  }, [engagementStats, viewScale, shareScale, endorseScale, prevStats]);
+
+  const viewAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: viewScale.value }],
+  }));
+
+  const shareAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: shareScale.value }],
+  }));
+
+  const endorseAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: endorseScale.value }],
+  }));
 
   if (!isAuthenticated || !currentUser) {
     return (
@@ -78,6 +137,11 @@ export default function ProfileTabScreen() {
     );
   }
 
+  const handleLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    logout();
+  };
+
   return (
     <View className="flex-1 bg-gray-50">
       {/* Header */}
@@ -90,7 +154,14 @@ export default function ProfileTabScreen() {
         }}
       >
         <View className="flex-row items-center justify-between">
-          <Text className="text-white text-xl font-bold">My Profile</Text>
+          <View className="flex-row items-center">
+            <Text className="text-white text-xl font-bold">My Profile</Text>
+            {/* Live indicator */}
+            <View className="bg-white/20 rounded-full px-2 py-1 flex-row items-center ml-2">
+              <View className="w-1.5 h-1.5 rounded-full bg-green-400 mr-1" />
+              <Text className="text-white text-xs">Live</Text>
+            </View>
+          </View>
           <Pressable
             onPress={() => router.push('/settings')}
             className="w-10 h-10 rounded-full bg-white/20 items-center justify-center"
@@ -144,28 +215,43 @@ export default function ProfileTabScreen() {
             ))}
           </View>
 
-          {/* Stats */}
+          {/* Real-time Stats */}
           <View className="flex-row mt-6 pt-4 border-t border-gray-100">
-            <View className="flex-1 items-center">
-              <Text className="text-gray-900 text-2xl font-bold">
-                {userPosts.length}
-              </Text>
-              <Text className="text-gray-500 text-sm">Posts</Text>
-            </View>
+            <Animated.View style={[{ flex: 1 }, viewAnimatedStyle]}>
+              <View className="items-center">
+                <View className="flex-row items-center">
+                  <Eye size={16} color="#059669" />
+                  <Text className="text-gray-900 text-2xl font-bold ml-1">
+                    {engagementStats.totalViews.toLocaleString()}
+                  </Text>
+                </View>
+                <Text className="text-gray-500 text-sm">Views</Text>
+              </View>
+            </Animated.View>
             <View className="w-px bg-gray-200" />
-            <View className="flex-1 items-center">
-              <Text className="text-gray-900 text-2xl font-bold">
-                {currentUser.endorsementCount}
-              </Text>
-              <Text className="text-gray-500 text-sm">Endorsements</Text>
-            </View>
+            <Animated.View style={[{ flex: 1 }, shareAnimatedStyle]}>
+              <View className="items-center">
+                <View className="flex-row items-center">
+                  <Share2 size={16} color="#059669" />
+                  <Text className="text-gray-900 text-2xl font-bold ml-1">
+                    {engagementStats.totalShares}
+                  </Text>
+                </View>
+                <Text className="text-gray-500 text-sm">Shares</Text>
+              </View>
+            </Animated.View>
             <View className="w-px bg-gray-200" />
-            <View className="flex-1 items-center">
-              <Text className="text-gray-900 text-2xl font-bold">
-                {totalViews.toLocaleString()}
-              </Text>
-              <Text className="text-gray-500 text-sm">Views</Text>
-            </View>
+            <Animated.View style={[{ flex: 1 }, endorseAnimatedStyle]}>
+              <View className="items-center">
+                <View className="flex-row items-center">
+                  <Star size={16} color="#f59e0b" fill="#f59e0b" />
+                  <Text className="text-gray-900 text-2xl font-bold ml-1">
+                    {engagementStats.totalEndorsements}
+                  </Text>
+                </View>
+                <Text className="text-gray-500 text-sm">Endorsements</Text>
+              </View>
+            </Animated.View>
           </View>
 
           {/* Account age */}
@@ -175,6 +261,17 @@ export default function ProfileTabScreen() {
               Member for {formatAccountAge(currentUser.createdAt)}
             </Text>
           </View>
+        </Animated.View>
+
+        {/* Real-time engagement notice */}
+        <Animated.View
+          entering={FadeInDown.delay(50)}
+          className="mx-4 mt-4 bg-emerald-50 rounded-xl p-3 flex-row items-center"
+        >
+          <TrendingUp size={18} color="#059669" />
+          <Text className="text-emerald-700 text-sm ml-2 flex-1">
+            Stats update in real-time as users engage with your posts
+          </Text>
         </Animated.View>
 
         {/* Recent posts */}
@@ -265,9 +362,9 @@ export default function ProfileTabScreen() {
           ) : (
             <View className="bg-white rounded-xl overflow-hidden">
               {userEndorsements.slice(0, 3).map((endorsement, index) => {
-                const endorser = useAppStore
-                  .getState()
-                  .getProfileById(endorsement.fromUserId);
+                const endorser = profiles.find(
+                  (p) => p.id === endorsement.fromUserId
+                );
                 return (
                   <Pressable
                     key={endorsement.id}
@@ -293,7 +390,7 @@ export default function ProfileTabScreen() {
                         "{endorsement.message}"
                       </Text>
                       <Text className="text-gray-400 text-xs mt-1">
-                        {formatTimeAgo(endorsement.createdAt)}
+                        {formatTimeAgo(new Date(endorsement.timestamp).toISOString())}
                       </Text>
                     </View>
                     <ChevronRight size={16} color="#9ca3af" />
@@ -310,7 +407,7 @@ export default function ProfileTabScreen() {
           className="mx-4 mt-6"
         >
           <Pressable
-            onPress={logout}
+            onPress={handleLogout}
             className="bg-white rounded-xl p-4 flex-row items-center justify-center active:bg-gray-50"
           >
             <LogOut size={18} color="#ef4444" />

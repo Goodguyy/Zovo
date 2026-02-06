@@ -1,11 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { View, Text, Image, Pressable, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Eye, Share2, MapPin, BadgeCheck } from 'lucide-react-native';
+import { Eye, Share2, MapPin, BadgeCheck, Heart } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInUp, useAnimatedStyle, useSharedValue, withSpring, withSequence } from 'react-native-reanimated';
 import { Post, useAppStore, formatTimeAgo } from '@/lib/store';
+import { useEngagement } from '@/lib/useEngagement';
 import { cn } from '@/lib/cn';
+import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 32;
@@ -14,16 +16,79 @@ interface PostCardProps {
   post: Post;
   index?: number;
   onShare?: () => void;
+  onVisible?: () => void;
 }
 
-export function PostCard({ post, index = 0, onShare }: PostCardProps) {
+export function PostCard({ post, index = 0, onShare, onVisible }: PostCardProps) {
   const router = useRouter();
   const profiles = useAppStore((s) => s.profiles);
+  const currentUser = useAppStore((s) => s.currentUser);
+  const hasTrackedView = useRef(false);
 
-  const profile = useMemo(() =>
-    profiles.find((p) => p.id === post.userId),
+  const profile = useMemo(
+    () => profiles.find((p) => p.id === post.userId),
     [profiles, post.userId]
   );
+
+  // Real-time engagement data
+  const {
+    viewCount,
+    shareCount,
+    endorsementCount,
+    trackView,
+  } = useEngagement(post.id, post.userId);
+
+  // Animation for metric updates
+  const viewScale = useSharedValue(1);
+  const shareScale = useSharedValue(1);
+  const endorseScale = useSharedValue(1);
+
+  // Track view when card becomes visible
+  useEffect(() => {
+    if (!hasTrackedView.current && currentUser?.id) {
+      hasTrackedView.current = true;
+      trackView();
+      onVisible?.();
+    }
+  }, [currentUser?.id, trackView, onVisible]);
+
+  // Animate metrics when they change
+  const prevViewCount = useRef(viewCount);
+  const prevShareCount = useRef(shareCount);
+  const prevEndorseCount = useRef(endorsementCount);
+
+  useEffect(() => {
+    if (viewCount > prevViewCount.current) {
+      viewScale.value = withSequence(withSpring(1.3), withSpring(1));
+    }
+    prevViewCount.current = viewCount;
+  }, [viewCount, viewScale]);
+
+  useEffect(() => {
+    if (shareCount > prevShareCount.current) {
+      shareScale.value = withSequence(withSpring(1.3), withSpring(1));
+    }
+    prevShareCount.current = shareCount;
+  }, [shareCount, shareScale]);
+
+  useEffect(() => {
+    if (endorsementCount > prevEndorseCount.current) {
+      endorseScale.value = withSequence(withSpring(1.3), withSpring(1));
+    }
+    prevEndorseCount.current = endorsementCount;
+  }, [endorsementCount, endorseScale]);
+
+  const viewAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: viewScale.value }],
+  }));
+
+  const shareAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: shareScale.value }],
+  }));
+
+  const endorseAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: endorseScale.value }],
+  }));
 
   const handlePress = () => {
     router.push(`/post/${post.id}`);
@@ -33,7 +98,17 @@ export function PostCard({ post, index = 0, onShare }: PostCardProps) {
     router.push(`/profile/${post.userId}`);
   };
 
+  const handleSharePress = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onShare?.();
+  };
+
   if (!profile) return null;
+
+  // Use real-time counts, fallback to post data for initial render
+  const displayViewCount = viewCount || post.viewCount;
+  const displayShareCount = shareCount || post.shareCount;
 
   return (
     <Animated.View
@@ -73,21 +148,40 @@ export function PostCard({ post, index = 0, onShare }: PostCardProps) {
               }}
             />
 
-            {/* View and share count badges */}
+            {/* Engagement badges */}
             <View className="absolute top-3 right-3 flex-row gap-2">
-              <View className="bg-black/50 rounded-full px-2.5 py-1.5 flex-row items-center">
-                <Eye size={12} color="#fff" />
-                <Text className="text-white text-xs font-medium ml-1">
-                  {post.viewCount.toLocaleString()}
-                </Text>
-              </View>
-              {post.shareCount > 0 && (
+              {/* Views badge */}
+              <Animated.View style={viewAnimatedStyle}>
                 <View className="bg-black/50 rounded-full px-2.5 py-1.5 flex-row items-center">
-                  <Share2 size={12} color="#fff" />
+                  <Eye size={12} color="#fff" />
                   <Text className="text-white text-xs font-medium ml-1">
-                    {post.shareCount}
+                    {displayViewCount.toLocaleString()}
                   </Text>
                 </View>
+              </Animated.View>
+
+              {/* Shares badge */}
+              {displayShareCount > 0 && (
+                <Animated.View style={shareAnimatedStyle}>
+                  <View className="bg-black/50 rounded-full px-2.5 py-1.5 flex-row items-center">
+                    <Share2 size={12} color="#fff" />
+                    <Text className="text-white text-xs font-medium ml-1">
+                      {displayShareCount}
+                    </Text>
+                  </View>
+                </Animated.View>
+              )}
+
+              {/* Endorsements badge */}
+              {endorsementCount > 0 && (
+                <Animated.View style={endorseAnimatedStyle}>
+                  <View className="bg-amber-500/80 rounded-full px-2.5 py-1.5 flex-row items-center">
+                    <Heart size={12} color="#fff" fill="#fff" />
+                    <Text className="text-white text-xs font-medium ml-1">
+                      {endorsementCount}
+                    </Text>
+                  </View>
+                </Animated.View>
               )}
             </View>
 
@@ -154,10 +248,7 @@ export function PostCard({ post, index = 0, onShare }: PostCardProps) {
                 View work details
               </Text>
               <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onShare?.();
-                }}
+                onPress={handleSharePress}
                 className="flex-row items-center bg-emerald-50 rounded-full px-3 py-1.5 active:bg-emerald-100"
               >
                 <Share2 size={14} color="#059669" />

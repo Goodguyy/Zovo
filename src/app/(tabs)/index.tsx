@@ -2,16 +2,18 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, RefreshControl, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Filter, Search, X, ChevronDown } from 'lucide-react-native';
+import { Filter, X, TrendingUp } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, SlideInDown } from 'react-native-reanimated';
 import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS } from '@/lib/store';
+import { recordShare } from '@/lib/engagement';
 import { PostCard } from '@/components/PostCard';
 import { cn } from '@/lib/cn';
+import * as Haptics from 'expo-haptics';
 
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const posts = useAppStore((s) => s.posts);
-  const incrementShareCount = useAppStore((s) => s.incrementShareCount);
+  const currentUser = useAppStore((s) => s.currentUser);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
@@ -27,17 +29,20 @@ export default function FeedScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    // Simulate refresh - in production this would fetch from backend
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
   const handleShare = async (post: typeof posts[0]) => {
     try {
       const result = await Share.share({
-        message: `Check out ${post.caption.substring(0, 100)}... on HustleWall!\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}`,
+        message: `Check out ${post.caption.substring(0, 100)}... on HustleWall!\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}\n\nFind skilled workers on HustleWall!`,
         title: 'Share on WhatsApp',
       });
-      if (result.action === Share.sharedAction) {
-        incrementShareCount(post.id);
+      if (result.action === Share.sharedAction && currentUser?.id) {
+        // Track the share in real-time engagement system
+        await recordShare(post.id, currentUser.id, 'other');
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch (error) {
       console.log('Share error:', error);
@@ -47,6 +52,7 @@ export default function FeedScreen() {
   const clearFilters = () => {
     setSelectedArea(null);
     setSelectedSkill(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const hasFilters = selectedArea || selectedSkill;
@@ -67,15 +73,25 @@ export default function FeedScreen() {
             <Text className="text-white/80 text-sm font-medium">Welcome to</Text>
             <Text className="text-white text-2xl font-bold">HustleWall</Text>
           </View>
-          <Pressable
-            onPress={() => setShowFilters(!showFilters)}
-            className={cn(
-              "w-10 h-10 rounded-full items-center justify-center",
-              showFilters ? "bg-white" : "bg-white/20"
-            )}
-          >
-            <Filter size={20} color={showFilters ? "#059669" : "#fff"} />
-          </Pressable>
+          <View className="flex-row items-center gap-2">
+            {/* Live indicator */}
+            <View className="bg-white/20 rounded-full px-3 py-1.5 flex-row items-center">
+              <View className="w-2 h-2 rounded-full bg-green-400 mr-1.5" />
+              <Text className="text-white text-xs font-medium">Live</Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                setShowFilters(!showFilters);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              className={cn(
+                "w-10 h-10 rounded-full items-center justify-center",
+                showFilters ? "bg-white" : "bg-white/20"
+              )}
+            >
+              <Filter size={20} color={showFilters ? "#059669" : "#fff"} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Filter indicators */}
@@ -122,7 +138,10 @@ export default function FeedScreen() {
               {NIGERIAN_AREAS.slice(0, 12).map((area) => (
                 <Pressable
                   key={area}
-                  onPress={() => setSelectedArea(selectedArea === area ? null : area)}
+                  onPress={() => {
+                    setSelectedArea(selectedArea === area ? null : area);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
                   className={cn(
                     "px-3 py-2 rounded-full border",
                     selectedArea === area
@@ -154,7 +173,10 @@ export default function FeedScreen() {
               {SKILL_TAGS.slice(0, 15).map((skill) => (
                 <Pressable
                   key={skill}
-                  onPress={() => setSelectedSkill(selectedSkill === skill ? null : skill)}
+                  onPress={() => {
+                    setSelectedSkill(selectedSkill === skill ? null : skill);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
                   className={cn(
                     "px-3 py-2 rounded-full border",
                     selectedSkill === skill
@@ -201,6 +223,17 @@ export default function FeedScreen() {
           />
         }
       >
+        {/* Real-time notice */}
+        <Animated.View
+          entering={FadeInDown}
+          className="bg-emerald-50 rounded-xl p-3 mb-4 flex-row items-center"
+        >
+          <TrendingUp size={18} color="#059669" />
+          <Text className="text-emerald-700 text-sm ml-2 flex-1">
+            All views, shares, and endorsements update in real-time
+          </Text>
+        </Animated.View>
+
         {filteredPosts.length === 0 ? (
           <Animated.View
             entering={FadeInDown}
