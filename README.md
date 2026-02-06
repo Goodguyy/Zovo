@@ -215,55 +215,79 @@ Posts are ranked by score in last 24 hours (top 5) and last 7 days (top 10).
 - Safety verification notice
 
 ### Auth Flow
-- Phone number entry (+234 format)
-- OTP verification via SMS (Firebase Auth)
-- 30-second resend timer
+- Phone number entry (+234 format) with carrier detection
+- OTP verification via SMS (Supabase + BestBulkSMS)
+- 5-minute OTP expiration with countdown timer
+- Auto-submit when 6 digits entered
 - Profile creation for new users
-- Carrier detection (MTN, Glo, Airtel, 9mobile)
+- Rate limiting: 3 OTP requests per hour
 
 ## Phone Authentication (OTP)
 
-### Current Implementation (Demo Mode)
-The app includes a mock Firebase implementation for development:
-- Enter any valid Nigerian phone number (+234XXXXXXXXXX)
-- Use code `123456` or any 6-digit code to verify
-- Simulates network delays and occasional failures
+### Current Implementation (Production-Ready)
+HustleWall uses Supabase backend with BestBulkSMS for reliable Nigerian SMS delivery:
+- **Beautiful UI**: Phone input with carrier detection, code input with countdown timer
+- **Security**: 6-digit OTP, 5-minute expiration, one-time use, server-side validation
+- **Rate Limiting**: Maximum 3 OTP requests per phone number per hour
+- **Demo Mode**: Works without BestBulkSMS API key (logs OTP to console for testing)
+- **Real SMS**: Integrated with BestBulkSMS for actual SMS delivery to Nigerian numbers
 
-### Production Setup (Firebase)
-To enable real SMS OTP verification:
+### Setup (3 Steps)
 
-1. **Create Firebase Project**
-   - Go to [Firebase Console](https://console.firebase.google.com)
-   - Create a new project or use existing
-   - Enable Phone Authentication in Authentication > Sign-in method
+1. **Supabase Database Setup**
+   - Create a Supabase project at [supabase.com](https://supabase.com)
+   - Copy SQL from `supabase-otp-schema.sql`
+   - Run in Supabase SQL Editor
+   - Creates OTP storage and rate limiting tables
 
 2. **Add Environment Variables** (in Vibecode ENV tab)
    ```
-   EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key
-   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-   EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-   EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-   EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-   EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
+   EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+   EXPO_PUBLIC_BULKSMS_API_KEY=your_bestbulksms_api_key  # Optional: for real SMS
+   EXPO_PUBLIC_BULKSMS_SENDER_ID=HustleWall            # Optional: SMS sender name
    ```
 
-3. **For Production Build**
-   After publishing, install Firebase packages:
-   ```bash
-   npx expo install @react-native-firebase/app @react-native-firebase/auth
-   ```
+3. **Integration** (Choose one approach)
+   - **Option A**: Use components directly in auth screen:
+     ```tsx
+     import OTPPhoneInput from '@/components/OTPPhoneInput';
+     import OTPCodeInput from '@/components/OTPCodeInput';
+     ```
+   - **Option B**: Use service functions for custom implementation:
+     ```tsx
+     import { sendOTP, verifyOTP, getOrCreateUserFromPhone } from '@/lib/otp-service';
+     ```
+
+### Features
+- **Carrier Detection**: Shows which network (MTN, Airtel, Glo, 9mobile) user is on
+- **Phone Normalization**: Accepts 08012345678, 2348012345678, or +2348012345678
+- **Countdown Timer**: Visual 5-minute countdown with color change on expiration
+- **Auto-Submit**: Automatically submits when user enters 6 digits
+- **Demo Mode**: Test without SMS charges (logs OTP code to LOGS tab)
+- **Real SMS**: Integrates with BestBulkSMS for production SMS delivery
 
 ### Nigerian Network Considerations
-- SMS delivery can take 30-60 seconds on busy networks
+- SMS delivery typically 5-30 seconds on Nigerian networks
 - Users should disable DND (Do Not Disturb) for OTP receipt
-- App detects carrier (MTN, Glo, Airtel, 9mobile) from phone prefix
-- Resend button activates after 30 seconds
+- App auto-detects carrier from phone number prefix
+- Rate limiting prevents brute force (3 requests per hour per phone)
 
 ### Security Best Practices
 - OTP codes expire after 5 minutes
-- Rate limiting prevents brute force attempts
-- Phone numbers stored in +234 international format
-- No precise location data collected
+- One-time use only (cannot reuse same code)
+- Rate limiting: 3 OTP requests per phone number per hour
+- Phone normalization prevents duplicate accounts
+- Server-side validation enforced by PostgreSQL functions
+- No client-side validation can be bypassed
+
+### Documentation
+See [OTP_AUTHENTICATION.md](./OTP_AUTHENTICATION.md) for complete reference documentation including:
+- Architecture and database schema
+- API reference for service functions
+- Testing scenarios and checklist
+- Troubleshooting guide
+- Cost estimation for SMS delivery
 
 ## App Structure
 
@@ -277,16 +301,20 @@ src/
 │   │   ├── leaderboard.tsx      # Weekly leaderboard with badges ⭐ NEW
 │   │   ├── create.tsx           # Post creation
 │   │   └── profile.tsx          # User's own profile with live stats
-│   ├── auth.tsx                 # Phone + OTP auth
+│   ├── auth.tsx                 # Phone + OTP auth (Firebase mock)
 │   ├── post/[id].tsx            # Post detail with live engagement
 │   ├── profile/[id].tsx         # Worker profile view
 │   └── settings.tsx             # App settings
 ├── components/
-│   └── PostCard.tsx             # Feed post card with live metrics
+│   ├── PostCard.tsx             # Feed post card with live metrics
+│   ├── OTPPhoneInput.tsx        # Phone input with carrier detection ⭐ NEW
+│   └── OTPCodeInput.tsx         # OTP code input with countdown ⭐ NEW
 └── lib/
     ├── store.ts                 # Zustand store with mock data
     ├── supabase.ts              # Supabase client config ⭐ NEW
     ├── engagement-supabase.ts   # Engagement service with Supabase ⭐ NEW
+    ├── otp-service.ts           # OTP business logic ⭐ NEW
+    ├── bestbulksms.ts           # BestBulkSMS API integration ⭐ NEW
     ├── engagement.ts            # Legacy AsyncStorage engagement (deprecated)
     ├── useEngagement.ts         # React hooks for engagement data
     ├── firebase-mock.ts         # Mock Firebase for development
@@ -340,10 +368,12 @@ Add these to Vibecode ENV tab:
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 
-# Firebase (for SMS OTP - optional, demo mode works without this)
-EXPO_PUBLIC_FIREBASE_API_KEY=optional
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=optional
+# BestBulkSMS (for real SMS OTP delivery - optional, demo mode works without this)
+EXPO_PUBLIC_BULKSMS_API_KEY=your_bestbulksms_api_key
+EXPO_PUBLIC_BULKSMS_SENDER_ID=HustleWall
 ```
+
+**Optional**: If you want to use real SMS, get your BestBulkSMS API key from https://www.bestbulksms.com/
 
 ## Zero-Capital Implementation Notes
 
