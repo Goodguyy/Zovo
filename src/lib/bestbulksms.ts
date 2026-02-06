@@ -7,7 +7,7 @@
 
 // Configuration - supports multiple variable name formats
 const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || process.env.EXPO_PUBLIC_BULKSMS_API_KEY || '';
-const BESTBULKSMS_API_URL = process.env.EXPO_PUBLIC_BULKSMS_API_URL || 'https://www.bfrankly.com/api/sms';
+const BESTBULKSMS_API_URL = process.env.EXPO_PUBLIC_BULKSMS_API_URL || 'https://www.bestbulksms.com.ng/api/sms/send';
 const BESTBULKSMS_SENDER_ID = process.env.EXPO_PUBLIC_BESTBULKSMS_SENDER_ID || process.env.EXPO_PUBLIC_BULKSMS_SENDER_ID || 'HustleWall';
 
 if (!BESTBULKSMS_API_KEY) {
