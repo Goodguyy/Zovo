@@ -8,7 +8,7 @@
 // Configuration - supports multiple variable name formats
 const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || process.env.EXPO_PUBLIC_BULKSMS_API_KEY || '';
 const BESTBULKSMS_API_URL = process.env.EXPO_PUBLIC_BULKSMS_API_URL || 'https://www.bestbulksms.com.ng/api/sms/send';
-const BESTBULKSMS_SENDER_ID = process.env.EXPO_PUBLIC_BESTBULKSMS_SENDER_ID || process.env.EXPO_PUBLIC_BULKSMS_SENDER_ID || 'HustleWall';
+const BESTBULKSMS_SENDER_ID = process.env.EXPO_PUBLIC_BESTBULKSMS_SENDER_ID || process.env.EXPO_PUBLIC_BULKSMS_SENDER_ID || 'ZOVO';
 
 // Debug log to verify API key is loaded
 console.log('[BestBulkSMS] API Key configured:', BESTBULKSMS_API_KEY ? 'YES' : 'NO');
@@ -123,12 +123,12 @@ export const sendOTPSMS = async (
   phoneNumber: string,
   otpCode: string
 ): Promise<SendSMSResponse> => {
-  const message = `Your HustleWall OTP is ${otpCode}. Expires in 5 minutes. Do not share this code.`;
+  const message = `Your ZOVO OTP is ${otpCode}. Expires in 5 minutes. Do not share this code.`;
 
   return sendSMS({
     phone_number: phoneNumber,
     message: message,
-    sender_id: 'HustleWall',
+    sender_id: 'ZOVO',
   });
 };
 
