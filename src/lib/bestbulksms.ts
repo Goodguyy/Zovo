@@ -10,6 +10,10 @@ const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || proce
 const BESTBULKSMS_API_URL = process.env.EXPO_PUBLIC_BULKSMS_API_URL || 'https://www.bestbulksms.com.ng/api/sms/send';
 const BESTBULKSMS_SENDER_ID = process.env.EXPO_PUBLIC_BESTBULKSMS_SENDER_ID || process.env.EXPO_PUBLIC_BULKSMS_SENDER_ID || 'HustleWall';
 
+// Debug log to verify API key is loaded
+console.log('[BestBulkSMS] API Key configured:', BESTBULKSMS_API_KEY ? 'YES' : 'NO');
+console.log('[BestBulkSMS] API URL:', BESTBULKSMS_API_URL);
+
 if (!BESTBULKSMS_API_KEY) {
   console.warn(
     'BestBulkSMS API key not configured. OTP will work in demo mode (check LOGS tab for codes).'
