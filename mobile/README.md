@@ -1,4 +1,4 @@
-# HustleWall
+# Zovo
 
 A mobile-first proof-of-work showcase app for Nigerian informal workers. Workers post photos of completed jobs with skill tags and area, build reputation through endorsements, and customers can contact them directly via WhatsApp or phone.
 
@@ -40,7 +40,7 @@ A mobile-first proof-of-work showcase app for Nigerian informal workers. Workers
 
 ## Supabase Integration
 
-HustleWall uses **Supabase** (PostgreSQL + Realtime) for a scalable, real-time backend.
+Zovo uses **Supabase** (PostgreSQL + Realtime) for a scalable, real-time backend.
 
 ### What Changed
 - **Engagement Storage**: Moved from AsyncStorage to Supabase `engagement` table
@@ -163,7 +163,7 @@ Posts are ranked by score in last 24 hours (top 5) and last 7 days (top 10).
 ## Screens Overview
 
 ### Feed (Home Tab)
-- Green header with HustleWall branding and "Live" indicator
+- Green header with Zovo branding and "Live" indicator
 - Filter button to show/hide area and skill filters
 - Pull-to-refresh functionality
 - **Trending section** (top 5 posts from last 24h)
@@ -225,7 +225,7 @@ Posts are ranked by score in last 24 hours (top 5) and last 7 days (top 10).
 ## Phone Authentication (OTP)
 
 ### Current Implementation (Production-Ready)
-HustleWall uses Supabase backend with BestBulkSMS for reliable Nigerian SMS delivery:
+Zovo uses Supabase backend with BestBulkSMS for reliable Nigerian SMS delivery:
 - **Beautiful UI**: Phone input with carrier detection, code input with countdown timer
 - **Security**: 6-digit OTP, 5-minute expiration, one-time use, server-side validation
 - **Rate Limiting**: Maximum 3 OTP requests per phone number per hour
@@ -245,7 +245,7 @@ HustleWall uses Supabase backend with BestBulkSMS for reliable Nigerian SMS deli
    EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
    EXPO_PUBLIC_BULKSMS_API_KEY=your_bestbulksms_api_key  # Optional: for real SMS
-   EXPO_PUBLIC_BULKSMS_SENDER_ID=HustleWall            # Optional: SMS sender name
+   EXPO_PUBLIC_BULKSMS_SENDER_ID=Zovo            # Optional: SMS sender name
    ```
 
 3. **Integration** (Choose one approach)
@@ -370,7 +370,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 
 # BestBulkSMS (for real SMS OTP delivery - optional, demo mode works without this)
 EXPO_PUBLIC_BULKSMS_API_KEY=your_bestbulksms_api_key
-EXPO_PUBLIC_BULKSMS_SENDER_ID=HustleWall
+EXPO_PUBLIC_BULKSMS_SENDER_ID=Zovo
 ```
 
 **Optional**: If you want to use real SMS, get your BestBulkSMS API key from https://www.bestbulksms.com/
@@ -399,7 +399,7 @@ See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for detailed scaling strategies.
 
 ## Real-Time Engagement Tracking
 
-HustleWall includes a comprehensive real-time engagement tracking system that records and displays live metrics for all user interactions.
+Zovo includes a comprehensive real-time engagement tracking system that records and displays live metrics for all user interactions.
 
 ### Features
 - **Post Views**: Tracks unique views per user with 30-minute cooldown to prevent inflation
@@ -541,7 +541,7 @@ src/
 ## Screens Overview
 
 ### Feed (Home Tab)
-- Green header with HustleWall branding and "Live" indicator
+- Green header with Zovo branding and "Live" indicator
 - Filter button to show/hide area and skill filters
 - Pull-to-refresh functionality
 - Post cards with live view/share/endorsement counts

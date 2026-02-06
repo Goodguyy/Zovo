@@ -117,7 +117,7 @@ export default function ProfileTabScreen() {
               <Text className="text-4xl">👋</Text>
             </View>
             <Text className="text-gray-900 text-xl font-bold mb-2">
-              Join HustleWall
+              Join Zovo
             </Text>
             <Text className="text-gray-500 text-center mb-6">
               Create an account to post your work, build your reputation, and
@@ -422,7 +422,7 @@ export default function ProfileTabScreen() {
         >
           <View className="bg-gray-100 rounded-xl p-4">
             <Text className="text-gray-500 text-xs text-center leading-5">
-              Public showcase only. All contact happens outside HustleWall.
+              Public showcase only. All contact happens outside Zovo.
               Meet in safe locations and agree on terms before work begins.
               We do not process payments or verify workers.
             </Text>

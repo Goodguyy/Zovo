@@ -140,7 +140,7 @@ export default function PostDetailScreen() {
   const handleShare = async () => {
     try {
       const result = await Share.share({
-        message: `Check out ${profile.name}'s work on HustleWall!\n\n"${post.caption.substring(0, 150)}..."\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}\n\nFind skilled workers on HustleWall!`,
+        message: `Check out ${profile.name}'s work on Zovo!\n\n"${post.caption.substring(0, 150)}..."\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}\n\nFind skilled workers on Zovo!`,
       });
       if (result.action === Share.sharedAction) {
         await trackShare('other');
@@ -153,7 +153,7 @@ export default function PostDetailScreen() {
 
   const handleWhatsApp = () => {
     const message = encodeURIComponent(
-      `Hi ${profile.name}, I saw your work on HustleWall and I'm interested in your services.`
+      `Hi ${profile.name}, I saw your work on Zovo and I'm interested in your services.`
     );
     Linking.openURL(`https://wa.me/${profile.whatsapp.replace(/\+/g, '')}?text=${message}`);
   };

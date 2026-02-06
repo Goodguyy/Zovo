@@ -354,7 +354,7 @@ export const useAppStore = create<AppState>()(
       getEndorsementsGivenByUser: (userId) => get().endorsements.filter((e) => e.fromUserId === userId),
     }),
     {
-      name: 'hustlewall-storage',
+      name: 'zovo-storage',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         currentUser: state.currentUser,

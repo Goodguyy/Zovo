@@ -36,7 +36,7 @@ export default function FeedScreen() {
   const handleShare = async (post: typeof posts[0]) => {
     try {
       const result = await Share.share({
-        message: `Check out ${post.caption.substring(0, 100)}... on HustleWall!\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}\n\nFind skilled workers on HustleWall!`,
+        message: `Check out ${post.caption.substring(0, 100)}... on Zovo!\n\nSkills: ${post.skills.join(', ')}\nArea: ${post.area}\n\nFind skilled workers on Zovo!`,
         title: 'Share on WhatsApp',
       });
       if (result.action === Share.sharedAction && currentUser?.id) {
@@ -71,7 +71,7 @@ export default function FeedScreen() {
         <View className="flex-row items-center justify-between">
           <View>
             <Text className="text-white/80 text-sm font-medium">Welcome to</Text>
-            <Text className="text-white text-2xl font-bold">HustleWall</Text>
+            <Text className="text-white text-2xl font-bold">Zovo</Text>
           </View>
           <View className="flex-row items-center gap-2">
             {/* Live indicator */}
@@ -273,7 +273,7 @@ export default function FeedScreen() {
             Safety Notice
           </Text>
           <Text className="text-amber-700 text-xs leading-5">
-            HustleWall connects you with skilled workers. Always verify credentials,
+            Zovo connects you with skilled workers. Always verify credentials,
             meet in safe public locations, and agree on payment terms before starting work.
             We do not share precise locations.
           </Text>

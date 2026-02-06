@@ -83,20 +83,20 @@ export default function SettingsScreen() {
   };
 
   const handleContact = () => {
-    Linking.openURL('mailto:support@hustlewall.com');
+    Linking.openURL('mailto:support@zovo.com');
   };
 
   const handleHelp = () => {
     Alert.alert(
-      'HustleWall Help',
-      'HustleWall connects informal workers with customers through proof-of-work posts.\n\n• Post photos of your completed work\n• Add skill tags and your service area\n• Get endorsements from satisfied customers\n• Customers can contact you via WhatsApp or phone\n\nFor more help, contact support@hustlewall.com'
+      'Zovo Help',
+      'Zovo connects informal workers with customers through proof-of-work posts.\n\n• Post photos of your completed work\n• Add skill tags and your service area\n• Get endorsements from satisfied customers\n• Customers can contact you via WhatsApp or phone\n\nFor more help, contact support@zovo.com'
     );
   };
 
   const handlePrivacy = () => {
     Alert.alert(
       'Privacy & Safety',
-      'HustleWall is designed with your safety in mind:\n\n• We never share your precise location\n• Only your broad service area is shown\n• Your phone number is only shared when you choose to receive calls\n• Endorsements are traceable to build trust\n\nAlways meet new customers in public places and agree on payment terms before starting work.'
+      'Zovo is designed with your safety in mind:\n\n• We never share your precise location\n• Only your broad service area is shown\n• Your phone number is only shared when you choose to receive calls\n• Endorsements are traceable to build trust\n\nAlways meet new customers in public places and agree on payment terms before starting work.'
     );
   };
 
@@ -227,10 +227,10 @@ export default function SettingsScreen() {
               About
             </Text>
             <View className="px-4 py-4">
-              <Text className="text-gray-900 font-semibold">HustleWall</Text>
+              <Text className="text-gray-900 font-semibold">Zovo</Text>
               <Text className="text-gray-500 text-sm mt-1">Version 1.0.0</Text>
               <Text className="text-gray-400 text-xs mt-3 leading-5">
-                HustleWall connects skilled informal workers with customers
+                Zovo connects skilled informal workers with customers
                 through proof-of-work posts. Built for the Nigerian market with
                 zero capital required.
               </Text>
@@ -255,7 +255,7 @@ export default function SettingsScreen() {
           {/* Footer */}
           <View className="items-center mt-6 px-4">
             <Text className="text-gray-400 text-xs text-center">
-              Made with love for Nigerian hustlers
+              Made with love for Nigerian hustlers by Zovo
             </Text>
           </View>
         </ScrollView>
