@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Home, PlusCircle, User } from 'lucide-react-native';
+import { Home, PlusCircle, User, Trophy } from 'lucide-react-native';
 import { View } from 'react-native';
 
 export default function TabLayout() {
@@ -30,6 +30,17 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View className={focused ? "bg-emerald-50 rounded-full p-1.5" : "p-1.5"}>
               <Home size={22} color={color} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: 'Leaderboard',
+          tabBarIcon: ({ color, focused }) => (
+            <View className={focused ? "bg-emerald-50 rounded-full p-1.5" : "p-1.5"}>
+              <Trophy size={22} color={color} />
             </View>
           ),
         }}
