@@ -136,7 +136,8 @@ export const sendOTPSMS = async (
  * Normalize phone number to international format
  * Accepts:
  * - +2348012345678 (already normalized)
- * - 08012345678 (Nigerian format)
+ * - 08012345678 (Nigerian format with leading 0)
+ * - 8012345678 (10 digits without leading 0)
  * - 2348012345678 (without +)
  */
 export const normalizePhoneNumber = (phone: string): string | null => {
@@ -144,19 +145,30 @@ export const normalizePhoneNumber = (phone: string): string | null => {
   let normalized = phone.replace(/[^\d+]/g, '');
 
   // Handle Nigerian phone numbers
-  if (normalized.startsWith('0')) {
+  if (normalized.startsWith('+234') && normalized.length === 14) {
+    // Already in correct format
+    return normalized;
+  } else if (normalized.startsWith('+234') && normalized.length === 13) {
+    // +234 followed by 9 digits - missing one digit
+    return null;
+  } else if (normalized.startsWith('0') && normalized.length === 11) {
     // 08012345678 → +2348012345678
     normalized = '+234' + normalized.substring(1);
-  } else if (normalized.startsWith('234')) {
+  } else if (normalized.startsWith('234') && normalized.length === 13) {
     // 2348012345678 → +2348012345678
     normalized = '+' + normalized;
-  } else if (!normalized.startsWith('+')) {
-    // No country code
+  } else if (normalized.length === 10 && /^[789]/.test(normalized)) {
+    // 8012345678 → +2348012345678 (10 digits starting with 7, 8, or 9)
+    normalized = '+234' + normalized;
+  } else if (normalized.startsWith('+') && normalized.length === 14) {
+    // Already has + and correct length
+    return normalized;
+  } else {
     return null;
   }
 
-  // Validate length (should be 13 chars: +234XXXXXXXXXX)
-  if (normalized.length !== 13) {
+  // Validate final length (should be 14 chars: +234XXXXXXXXXX)
+  if (normalized.length !== 14) {
     return null;
   }
 
