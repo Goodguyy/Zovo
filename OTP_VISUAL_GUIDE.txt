@@ -1,0 +1,337 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                 HUSTLEWALL OTP AUTHENTICATION SYSTEM                       ║
+║                      Production-Ready Implementation                        ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SIGN UP FLOW                                                               ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  User taps "Sign Up"
+        ↓
+  ┌─────────────────────────────────┐
+  │  OTPPhoneInput Component         │
+  ├─────────────────────────────────┤
+  │ Enter: 08012345678              │
+  │ Carrier: MTN (auto-detected)    │
+  │ [Send OTP Button]               │
+  └─────────────────────────────────┘
+        ↓
+  sendOTP() Service
+        ↓
+  Supabase Function: generate_otp()
+  ├─ Check rate limit (3/hour)
+  ├─ Generate random 6 digits (e.g., 427519)
+  ├─ Set expiration = NOW() + 5 minutes
+  ├─ Store in otp_codes table
+  └─ Return success
+        ↓
+  sendOTPSMS() via BestBulkSMS API
+  ├─ Format phone: +2348012345678
+  ├─ Message: "Your HustleWall OTP is 427519. Expires in 5 minutes."
+  ├─ Call: https://api.bestbulksms.com/api/send
+  └─ Log in sms_delivery_logs table
+        ↓
+  SMS delivered to user's phone
+        ↓
+  ┌─────────────────────────────────┐
+  │  OTPCodeInput Component         │
+  ├─────────────────────────────────┤
+  │ Enter: 427519                   │
+  │ Timer: 4:32 remaining           │
+  │ [Auto-submits on 6 digits]      │
+  └─────────────────────────────────┘
+        ↓
+  verifyOTP() Service
+        ↓
+  Supabase Function: verify_otp()
+  ├─ Find OTP record by phone
+  ├─ Check: not expired (≤ 5 min)
+  ├─ Check: not used yet
+  ├─ Check: code matches (427519 == 427519)
+  ├─ Mark as used: UPDATE used = TRUE
+  └─ Return success
+        ↓
+  getOrCreateUserFromPhone()
+  ├─ Query: SELECT FROM users WHERE phone = +2348012345678
+  ├─ If exists: Return user (login)
+  ├─ If not: INSERT new user with defaults
+  │   ├─ phone: +2348012345678
+  │   ├─ name: User1234
+  │   ├─ whatsapp: +2348012345678
+  │   ├─ skills: []
+  │   └─ area: Not set
+  └─ Return user
+        ↓
+  ✓ User authenticated
+  ✓ Logged in successfully
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ DATABASE SCHEMA                                                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+┌─ otp_codes ──────────────────────────────┐
+│ id          UUID (Primary Key)           │
+│ phone_number    TEXT (+2348012345678)    │
+│ otp_code        TEXT (427519)            │
+│ expires_at      TIMESTAMP (Now + 5min)   │
+│ used            BOOLEAN (FALSE → TRUE)   │
+│ created_at      TIMESTAMP (NOW)          │
+└──────────────────────────────────────────┘
+         ↓ Indexed on: phone_number, created_at
+
+┌─ otp_request_logs ───────────────────────┐
+│ id          UUID (Primary Key)           │
+│ phone_number    TEXT (+2348012345678)    │
+│ request_count   INTEGER (1, 2, 3)        │
+│ window_start    TIMESTAMP (Hourly)       │
+│ last_request_at TIMESTAMP (NOW)          │
+└──────────────────────────────────────────┘
+         ↓ Rate limiting: MAX 3 per hour
+
+┌─ sms_delivery_logs ──────────────────────┐
+│ id          UUID (Primary Key)           │
+│ phone_number    TEXT                     │
+│ otp_id          UUID (FK to otp_codes)   │
+│ message         TEXT                     │
+│ status          TEXT (pending/sent/fail) │
+│ error_message   TEXT (if failed)         │
+│ created_at      TIMESTAMP                │
+└──────────────────────────────────────────┘
+         ↓ Indexed on: phone_number, status
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SECURITY LAYERS                                                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+Layer 1: RATE LIMITING
+├─ Max 3 OTP requests per phone per hour
+├─ Enforced in generate_otp() function
+├─ Checked in otp_request_logs table
+└─ Error: "Too many requests, try again in 1 hour"
+
+Layer 2: OTP EXPIRATION
+├─ Generated OTP expires after 5 minutes
+├─ Enforced in verify_otp() function
+├─ Checked: NOW() <= expires_at
+└─ Cleanup: delete_expired_otps() runs daily
+
+Layer 3: ONE-TIME USE
+├─ Each OTP used exactly once
+├─ used flag set to TRUE after verification
+├─ Unique constraint prevents duplicates
+└─ Replay attack prevention
+
+Layer 4: PHONE NORMALIZATION
+├─ All phones stored as +2348012345678
+├─ Prevents: 08012345678 vs 2348012345678 duplicates
+├─ Conversion: 08xxx → +234xxx
+└─ Carrier detection: 701/703/708 → Airtel/MTN
+
+Layer 5: SERVER-SIDE VALIDATION
+├─ All checks happen in Supabase functions
+├─ Client can't bypass validation
+├─ Even if app is hacked, backend is secure
+└─ Database has constraints & triggers
+
+Layer 6: DEVICE FINGERPRINTING
+├─ Device ID stored in engagement table
+├─ Ready for coordinated fraud detection
+├─ Can track multiple signups from same device
+└─ Future: Block if >5 signups from same device/hour
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ PHONE NUMBER NORMALIZATION                                                ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+Input Format              →  Output Format           →  Carrier
+────────────────────────────────────────────────────────────────────
+08012345678             →  +2348012345678          →  MTN
+08101234567             →  +2348101234567          →  Airtel
+07051234567             →  +2347051234567          →  Glo
+08091234567             →  +2348091234567          →  9mobile
+2348012345678           →  +2348012345678          →  MTN
++2348012345678          →  +2348012345678          →  MTN
+0012345678              →  invalid (too short)
++1234567890             →  invalid (not Nigeria)
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ERROR HANDLING                                                             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+SEND OTP ERRORS:
+├─ "Invalid phone number format"
+│  └─ Fix: Enter as 08012345678 or +2348012345678
+├─ "Too many OTP requests"
+│  └─ Fix: Wait 1 hour or use different number
+├─ "BestBulkSMS API key not configured"
+│  └─ Fix: Add to Vibecode ENV tab
+└─ "SMS sending failed"
+   └─ Fix: Check BestBulkSMS balance, try demo mode
+
+VERIFY OTP ERRORS:
+├─ "OTP not found"
+│  └─ Fix: Request new OTP first
+├─ "OTP expired"
+│  └─ Fix: Code valid only for 5 minutes
+├─ "Invalid OTP code"
+│  └─ Fix: Check code matches SMS
+└─ "OTP already used"
+   └─ Fix: Request new OTP
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ TIMELINE - OTP LIFECYCLE                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+Time    Action                                Status
+────────────────────────────────────────────────────────────────────
+T+0     User clicks "Send OTP"
+        OTP 427519 generated                  ✓ Active, unused
+        SMS sent to +2348012345678           ⏱ Expires in 5:00
+
+T+30s   SMS delivered to user's phone        
+        User sees code 427519 on phone       ✓ Active, unused
+
+T+1m    User enters code and clicks verify
+        Code verified, not expired           ✓ Valid
+        OTP marked as USED                   ✓ Used, can't reuse
+
+T+3m    User closes and comes back
+        Tries to verify same code again
+        Error: "OTP already used"            ✗ Invalid
+
+T+5m    Original OTP expires                 ✗ Expired
+        If user didn't verify, must request new
+
+T+24h   Cleanup job runs
+        Expired OTP deleted from table       ✓ Cleaned up
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ RATE LIMITING TIMELINE                                                    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+Time        Action                      Remaining   Status
+─────────────────────────────────────────────────────────────────
+T+0m        1st OTP request             2 left      ✓ OK
+T+2m        2nd OTP request             1 left      ✓ OK
+T+4m        3rd OTP request             0 left      ✓ OK
+T+6m        4th OTP request             -           ✗ BLOCKED
+            Error: "Too many requests"
+T+60m       1-hour window expires
+            Window resets to 0
+T+60m+1s    5th OTP request             2 left      ✓ OK again
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ FILES & THEIR ROLES                                                       ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+FRONTEND (React Native)
+┌─────────────────────────────────────────┐
+│ src/components/OTPPhoneInput.tsx        │
+│ ├─ Phone number input                   │
+│ ├─ Carrier detection                    │
+│ └─ Send OTP button                      │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│ src/components/OTPCodeInput.tsx         │
+│ ├─ 6-digit code input                   │
+│ ├─ Countdown timer                      │
+│ └─ Verify button                        │
+└─────────────────────────────────────────┘
+
+BACKEND (Services)
+┌─────────────────────────────────────────┐
+│ src/lib/bestbulksms.ts                  │
+│ ├─ sendOTPSMS() → BestBulkSMS API      │
+│ ├─ normalizePhoneNumber()               │
+│ └─ detectNigerianCarrier()              │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│ src/lib/otp-service.ts                  │
+│ ├─ sendOTP() → Supabase + SMS           │
+│ ├─ verifyOTP() → Supabase verify        │
+│ └─ getOrCreateUserFromPhone()           │
+└─────────────────────────────────────────┘
+
+DATABASE (Supabase PostgreSQL)
+┌─────────────────────────────────────────┐
+│ supabase-otp-schema.sql                 │
+│ ├─ otp_codes table                      │
+│ ├─ otp_request_logs table               │
+│ ├─ sms_delivery_logs table              │
+│ └─ Functions & triggers                 │
+└─────────────────────────────────────────┘
+
+DOCUMENTATION
+├─ OTP_QUICKSTART.md (5-min setup)
+├─ OTP_AUTHENTICATION.md (complete reference)
+├─ OTP_IMPLEMENTATION_SUMMARY.md (technical details)
+└─ OTP_COMPLETE_GUIDE.md (overview)
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SETUP CHECKLIST                                                           ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+Step 1: Database Setup (2 minutes)
+  ☐ Open Supabase SQL Editor
+  ☐ Copy supabase-otp-schema.sql
+  ☐ Run all SQL
+  ☐ Verify 3 tables created
+  ☐ Verify 4 functions created
+
+Step 2: BestBulkSMS Setup (3 minutes)
+  ☐ Sign up at bestbulksms.com
+  ☐ Copy API key
+  ☐ Go to Vibecode ENV tab
+  ☐ Add EXPO_PUBLIC_BESTBULKSMS_API_KEY
+  ☐ Optionally add EXPO_PUBLIC_BESTBULKSMS_SENDER_ID
+
+Step 3: Testing (5 minutes)
+  ☐ Test demo mode (no API key)
+  ☐ Enter phone: 08012345678
+  ☐ Check console for OTP
+  ☐ Verify code works
+  ☐ Test with real SMS
+
+Step 4: Integration (15 minutes)
+  ☐ Import OTPPhoneInput component
+  ☐ Import OTPCodeInput component
+  ☐ Wire up in auth screen
+  ☐ Test full flow
+  ☐ Deploy
+
+
+TOTAL SETUP TIME: ~30 minutes
+
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SUCCESS INDICATORS                                                        ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+✓ OTP sent via BestBulkSMS
+✓ User receives SMS with 6-digit code
+✓ Countdown timer shows 5:00 → 0:00
+✓ Code verifies successfully
+✓ User created in Supabase
+✓ Subsequent login skips signup
+✓ Rate limit blocks 4th request
+✓ Expired OTP shows error
+✓ Wrong code shows error
+✓ Beautiful UI with animations
+✓ Clear error messages
+✓ Demo mode works
+✓ Production SMS works
+✓ No TypeScript errors
+✓ All tests pass
+
+You're ready to ship! 🚀
