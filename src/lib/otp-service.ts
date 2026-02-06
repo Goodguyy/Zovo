@@ -5,7 +5,7 @@
  */
 
 import { supabase } from './supabase';
-import { sendOTPSMS, normalizePhoneNumber, isBestBulkSMSConfigured } from './bestbulksms';
+import { sendOTPSMS, normalizePhoneNumber } from './bestbulksms';
 
 export interface SendOTPRequest {
   phone_number: string;
@@ -49,27 +49,15 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
 
     console.log('[OTP] Normalized phone:', normalizedPhone);
 
-    // Check if BestBulkSMS is configured
-    const smsConfigured = isBestBulkSMSConfigured();
-    console.log('[OTP] BestBulkSMS configured:', smsConfigured);
-
-    if (!smsConfigured) {
-      console.warn('[OTP] BestBulkSMS not configured. Using demo mode.');
-      // In demo mode, just generate OTP without sending SMS
-      return sendOTPDemo(normalizedPhone);
-    }
-
-    console.log('[OTP] SMS is configured, will attempt to send real SMS');
-
     // Step 1: Generate OTP in Supabase
-    console.log('[OTP] Generating OTP for', normalizedPhone);
+    console.log('[OTP] Generating OTP in Supabase...');
     const { data: generateResult, error: generateError } = await supabase.rpc(
       'generate_otp',
       { p_phone: normalizedPhone }
     );
 
-    // Function returns a table row with: success, otp_code, expires_at
     if (generateError) {
+      console.log('[OTP] Supabase error:', generateError.message);
       return {
         success: false,
         error: generateError.message || 'Failed to generate OTP',
@@ -78,6 +66,7 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
 
     // Handle array response (table returns array) or single row
     const result = Array.isArray(generateResult) ? generateResult[0] : generateResult;
+    console.log('[OTP] Supabase result:', JSON.stringify(result));
 
     if (!result?.success) {
       return {
@@ -92,7 +81,7 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
     const otpCode = result.otp_code;
 
     if (!otpCode) {
-      console.warn('[OTP] No OTP code returned from Supabase');
+      console.log('[OTP] ERROR: No OTP code returned from Supabase');
       return {
         success: false,
         error: 'Failed to generate OTP code',
@@ -100,21 +89,21 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
     }
 
     console.log('[OTP] Sending OTP via SMS...');
-    console.log('[OTP] Calling sendOTPSMS with phone:', normalizedPhone, 'code:', otpCode);
-    let smsResult: any = null;
+    console.log('[OTP] Phone:', normalizedPhone, 'Code:', otpCode);
 
-    try {
-      smsResult = await sendOTPSMS(normalizedPhone, otpCode);
-      if (!smsResult.success) {
-        console.warn('[OTP] SMS sending failed:', smsResult.error);
-        // Don't fail - OTP was generated, SMS just didn't send
-      } else {
-        console.log('[OTP] SMS sent successfully');
-      }
-    } catch (smsError) {
-      console.warn('[OTP] SMS error:', smsError);
-      // Continue anyway - OTP is still valid
+    const smsResult = await sendOTPSMS(normalizedPhone, otpCode);
+
+    console.log('[OTP] SMS Result:', JSON.stringify(smsResult));
+
+    if (!smsResult.success) {
+      console.log('[OTP] SMS failed:', smsResult.error);
+      return {
+        success: false,
+        error: smsResult.error || 'Failed to send SMS',
+      };
     }
+
+    console.log('[OTP] SMS sent successfully!');
 
     return {
       success: true,
@@ -124,54 +113,10 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.log('[OTP] CATCH ERROR:', errorMessage);
     return {
       success: false,
       error: `Failed to send OTP: ${errorMessage}`,
-    };
-  }
-};
-
-/**
- * Demo mode: Generate OTP without sending SMS
- * Used for testing and when BestBulkSMS is not configured
- */
-export const sendOTPDemo = async (phoneNumber: string): Promise<SendOTPResponse> => {
-  try {
-    const { data: generateResult, error: generateError } = await supabase.rpc(
-      'generate_otp',
-      { p_phone: phoneNumber }
-    );
-
-    if (generateError) {
-      return {
-        success: false,
-        error: generateError.message || 'Failed to generate OTP',
-      };
-    }
-
-    // Handle array response (table returns array) or single row
-    const result = Array.isArray(generateResult) ? generateResult[0] : generateResult;
-
-    if (!result?.success) {
-      return {
-        success: false,
-        error: 'Failed to generate OTP',
-      };
-    }
-
-    console.log('[OTP DEMO] OTP generated. In production, SMS would be sent.');
-    console.log('[OTP DEMO] For testing, use OTP code:', result.otp_code);
-
-    return {
-      success: true,
-      message: 'OTP generated (demo mode). Check console for code. Expires in 5 minutes.',
-      expires_at: result.expires_at,
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return {
-      success: false,
-      error: `Failed to generate OTP: ${errorMessage}`,
     };
   }
 };
@@ -310,8 +255,6 @@ export const checkOTPRateLimit = async (phoneNumber: string) => {
       };
     }
 
-    // This would require a separate function or direct DB query
-    // For now, rate limiting is handled server-side in Supabase
     console.log('[OTP] Rate limit check for', normalizedPhone);
 
     return {
@@ -329,7 +272,6 @@ export const checkOTPRateLimit = async (phoneNumber: string) => {
 
 export default {
   sendOTP,
-  sendOTPDemo,
   verifyOTP,
   getOrCreateUserFromPhone,
   checkOTPRateLimit,
