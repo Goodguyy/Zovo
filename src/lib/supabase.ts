@@ -12,26 +12,32 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+// Check if Supabase is configured
+const isConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+if (!isConfigured) {
   console.warn(
-    'Supabase credentials not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your ENV tab.'
+    'Supabase credentials not configured. Please add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your ENV tab.'
   );
 }
 
-// Create Supabase client with AsyncStorage for session persistence
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    storage: AsyncStorage as any,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
-    },
-  },
-});
+// Create Supabase client only if configured, otherwise create a dummy client
+// that will be replaced when credentials are available
+export const supabase = isConfigured
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        storage: AsyncStorage as any,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
+    })
+  : (null as unknown as ReturnType<typeof createClient>);
 
 
 // Types for database tables
@@ -92,7 +98,7 @@ export interface DBLeaderboardEntry {
 
 // Helper to check if Supabase is configured
 export const isSupabaseConfigured = (): boolean => {
-  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  return isConfigured;
 };
 
 // Device fingerprint for fraud prevention
@@ -127,6 +133,10 @@ export const subscribeToTable = <T,>(
   callback: RealtimeCallback<T>,
   filter?: { column: string; value: string }
 ) => {
+  if (!isConfigured || !supabase) {
+    return () => {}; // Return no-op unsubscribe if not configured
+  }
+
   const config: any = {
     event: '*',
     schema: 'public',
@@ -174,6 +184,10 @@ export const subscribeToPostEngagement = (
 
 // Subscribe to all posts for feed
 export const subscribeToAllPosts = (callback: (post: DBPost, eventType: string) => void) => {
+  if (!isConfigured || !supabase) {
+    return () => {}; // Return no-op unsubscribe if not configured
+  }
+
   const channel = supabase
     .channel('posts_feed')
     .on(
@@ -197,6 +211,10 @@ export const subscribeToAllPosts = (callback: (post: DBPost, eventType: string) 
 export const subscribeToLeaderboard = (
   callback: (entries: DBLeaderboardEntry[]) => void
 ) => {
+  if (!isConfigured || !supabase) {
+    return () => {}; // Return no-op unsubscribe if not configured
+  }
+
   const channel = supabase
     .channel('leaderboard_updates')
     .on(
