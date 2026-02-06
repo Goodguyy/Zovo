@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const hasIncrementedView = useRef(false);
 
   const posts = useAppStore((s) => s.posts);
   const profiles = useAppStore((s) => s.profiles);
@@ -39,10 +40,19 @@ export default function PostDetailScreen() {
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const addEndorsement = useAppStore((s) => s.addEndorsement);
+  const incrementViewCount = useAppStore((s) => s.incrementViewCount);
 
   const post = posts.find((p) => p.id === id);
   const profile = post ? profiles.find((p) => p.id === post.userId) : null;
   const postEndorsements = endorsements.filter((e) => e.postId === id);
+
+  // Increment view count only once when post detail is opened
+  useEffect(() => {
+    if (id && !hasIncrementedView.current) {
+      hasIncrementedView.current = true;
+      incrementViewCount(id);
+    }
+  }, [id]);
 
   const [showEndorseForm, setShowEndorseForm] = useState(false);
   const [endorseMessage, setEndorseMessage] = useState('');

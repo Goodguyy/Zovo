@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Image, Pressable, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Eye, Share2, MapPin, BadgeCheck } from 'lucide-react-native';
@@ -18,15 +18,12 @@ interface PostCardProps {
 
 export function PostCard({ post, index = 0, onShare }: PostCardProps) {
   const router = useRouter();
-  const getProfileById = useAppStore((s) => s.getProfileById);
-  const incrementViewCount = useAppStore((s) => s.incrementViewCount);
+  const profiles = useAppStore((s) => s.profiles);
 
-  const profile = getProfileById(post.userId);
-
-  useEffect(() => {
-    // Increment view count when card is rendered
-    incrementViewCount(post.id);
-  }, [post.id]);
+  const profile = useMemo(() =>
+    profiles.find((p) => p.id === post.userId),
+    [profiles, post.userId]
+  );
 
   const handlePress = () => {
     router.push(`/post/${post.id}`);
