@@ -133,8 +133,54 @@ src/
 
 ### Auth Flow
 - Phone number entry (+234 format)
-- OTP verification (demo: 1234)
+- OTP verification via SMS (Firebase Auth)
+- 30-second resend timer
 - Profile creation for new users
+- Carrier detection (MTN, Glo, Airtel, 9mobile)
+
+## Phone Authentication (OTP)
+
+### Current Implementation (Demo Mode)
+The app includes a mock Firebase implementation for development:
+- Enter any valid Nigerian phone number (+234XXXXXXXXXX)
+- Use code `123456` or any 6-digit code to verify
+- Simulates network delays and occasional failures
+
+### Production Setup (Firebase)
+To enable real SMS OTP verification:
+
+1. **Create Firebase Project**
+   - Go to [Firebase Console](https://console.firebase.google.com)
+   - Create a new project or use existing
+   - Enable Phone Authentication in Authentication > Sign-in method
+
+2. **Add Environment Variables** (in Vibecode ENV tab)
+   ```
+   EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key
+   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+   EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+   EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+   EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
+   ```
+
+3. **For Production Build**
+   After publishing, install Firebase packages:
+   ```bash
+   npx expo install @react-native-firebase/app @react-native-firebase/auth
+   ```
+
+### Nigerian Network Considerations
+- SMS delivery can take 30-60 seconds on busy networks
+- Users should disable DND (Do Not Disturb) for OTP receipt
+- App detects carrier (MTN, Glo, Airtel, 9mobile) from phone prefix
+- Resend button activates after 30 seconds
+
+### Security Best Practices
+- OTP codes expire after 5 minutes
+- Rate limiting prevents brute force attempts
+- Phone numbers stored in +234 international format
+- No precise location data collected
 
 ## Design Principles
 
