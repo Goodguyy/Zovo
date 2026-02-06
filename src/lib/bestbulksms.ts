@@ -5,14 +5,14 @@
  * API Docs: https://www.bestbulksms.com/api-documentation
  */
 
-// Configuration - set these in ENV tab
-const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || '';
-const BESTBULKSMS_API_URL = 'https://api.bestbulksms.com/api/send';
-const BESTBULKSMS_SENDER_ID = process.env.EXPO_PUBLIC_BESTBULKSMS_SENDER_ID || 'HustleWall';
+// Configuration - supports multiple variable name formats
+const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || process.env.EXPO_PUBLIC_BULKSMS_API_KEY || '';
+const BESTBULKSMS_API_URL = process.env.EXPO_PUBLIC_BULKSMS_API_URL || 'https://www.bfrankly.com/api/sms';
+const BESTBULKSMS_SENDER_ID = process.env.EXPO_PUBLIC_BESTBULKSMS_SENDER_ID || process.env.EXPO_PUBLIC_BULKSMS_SENDER_ID || 'HustleWall';
 
 if (!BESTBULKSMS_API_KEY) {
   console.warn(
-    'BestBulkSMS API key not configured. Please add EXPO_PUBLIC_BESTBULKSMS_API_KEY to your ENV tab.'
+    'BestBulkSMS API key not configured. OTP will work in demo mode (check LOGS tab for codes).'
   );
 }
 
