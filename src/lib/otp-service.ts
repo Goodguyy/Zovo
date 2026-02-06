@@ -69,12 +69,21 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
     console.log('[OTP] OTP generated, expires at:', generateResult.expires_at);
 
     // Step 2: Send OTP via SMS
-    // In a production setup, this would be done via Supabase Edge Function
-    // For now, we'll do it client-side (not recommended for production)
+    const otpCode = generateResult.otp_code || generateResult.code;
+
+    if (!otpCode) {
+      console.warn('[OTP] No OTP code returned from Supabase');
+      return {
+        success: false,
+        error: 'Failed to generate OTP code',
+      };
+    }
+
+    console.log('[OTP] Sending OTP via SMS...');
     let smsResult: any = null;
 
     try {
-      smsResult = await sendOTPSMS(normalizedPhone, '123456'); // Placeholder - should be real OTP from DB
+      smsResult = await sendOTPSMS(normalizedPhone, otpCode);
       if (!smsResult.success) {
         console.warn('[OTP] SMS sending failed:', smsResult.error);
         // Don't fail - OTP was generated, SMS just didn't send
