@@ -1,56 +1,88 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Image } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Trophy, Medal, Flame, TrendingUp } from 'lucide-react-native';
+import { Trophy, Flame, TrendingUp, Camera } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withSpring, withSequence } from 'react-native-reanimated';
-import { supabase, DBLeaderboardEntry, subscribeToLeaderboard } from '@/lib/supabase';
+import { useAppStore } from '@/lib/store';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
 
-const BADGE_COLORS = {
-  1: { bg: '#fbbf24', text: '#78350f', icon: '🥇', label: 'Champion' },
-  2: { bg: '#d1d5db', text: '#374151', icon: '🥈', label: 'Runner-up' },
-  3: { bg: '#f97316', text: '#ffffff', icon: '🥉', label: 'Third Place' },
-};
+interface LeaderboardEntry {
+  userId: string;
+  userName: string;
+  userSkills: string[];
+  totalViews: number;
+  totalShares: number;
+  totalEndorsements: number;
+  engagementScore: number;
+  rank: number;
+}
 
 export default function LeaderboardScreen() {
   const insets = useSafeAreaInsets();
-  const [leaderboard, setLeaderboard] = useState<DBLeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const posts = useAppStore((s) => s.posts);
+  const profiles = useAppStore((s) => s.profiles);
   const [timeframe, setTimeframe] = useState<'week' | 'all'>('week');
 
   // Animation values for top 3
   const topScale = useSharedValue(1);
 
-  useEffect(() => {
-    const loadLeaderboard = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase.rpc('get_weekly_leaderboard', { p_limit: 50 });
-        if (error) throw error;
-        setLeaderboard(data ?? []);
+  // Build leaderboard from local store data
+  const leaderboard: LeaderboardEntry[] = React.useMemo(() => {
+    const userEngagement: Record<string, { views: number; shares: number; endorsements: number }> = {};
 
-        // Animate top 3
-        topScale.value = withSequence(withSpring(0.9), withSpring(1));
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch (error) {
-        console.log('Error loading leaderboard:', error);
-      } finally {
-        setLoading(false);
+    // Aggregate engagement per user from posts
+    posts.forEach(post => {
+      if (!userEngagement[post.userId]) {
+        userEngagement[post.userId] = { views: 0, shares: 0, endorsements: 0 };
       }
-    };
-
-    loadLeaderboard();
-
-    // Subscribe to leaderboard updates
-    const unsubscribe = subscribeToLeaderboard((entries) => {
-      setLeaderboard(entries);
-      topScale.value = withSequence(withSpring(0.95), withSpring(1));
+      userEngagement[post.userId].views += post.viewCount;
+      userEngagement[post.userId].shares += post.shareCount;
     });
 
-    return () => unsubscribe();
-  }, []);
+    // Add endorsements from profiles
+    profiles.forEach(profile => {
+      if (!userEngagement[profile.id]) {
+        userEngagement[profile.id] = { views: 0, shares: 0, endorsements: 0 };
+      }
+      userEngagement[profile.id].endorsements = profile.endorsementCount;
+    });
+
+    // Build leaderboard entries
+    const entries: LeaderboardEntry[] = Object.entries(userEngagement)
+      .map(([userId, engagement]) => {
+        const profile = profiles.find(p => p.id === userId);
+        if (!profile) return null;
+
+        const engagementScore = engagement.views + (engagement.shares * 2) + (engagement.endorsements * 3);
+
+        return {
+          userId,
+          userName: profile.name,
+          userSkills: profile.skills,
+          totalViews: engagement.views,
+          totalShares: engagement.shares,
+          totalEndorsements: engagement.endorsements,
+          engagementScore,
+          rank: 0,
+        };
+      })
+      .filter((entry): entry is LeaderboardEntry => entry !== null && entry.engagementScore > 0)
+      .sort((a, b) => b.engagementScore - a.engagementScore)
+      .map((entry, index) => ({ ...entry, rank: index + 1 }));
+
+    return entries;
+  }, [posts, profiles]);
+
+  useEffect(() => {
+    if (leaderboard.length > 0) {
+      topScale.value = withSequence(withSpring(0.9), withSpring(1));
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [leaderboard.length, topScale]);
 
   const topAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: topScale.value }],
@@ -59,16 +91,8 @@ export default function LeaderboardScreen() {
   const topThree = leaderboard.slice(0, 3);
   const restOfLeaderboard = leaderboard.slice(3);
 
-  if (loading) {
-    return (
-      <View className="flex-1 bg-gray-50 items-center justify-center">
-        <Text className="text-gray-500">Loading leaderboard...</Text>
-      </View>
-    );
-  }
-
   return (
-    <View className="flex-1 bg-gradient-to-b from-emerald-50 to-gray-50">
+    <View className="flex-1 bg-gray-50">
       {/* Header */}
       <LinearGradient
         colors={['#059669', '#047857']}
@@ -80,10 +104,10 @@ export default function LeaderboardScreen() {
       >
         <View className="flex-row items-center gap-2 mb-2">
           <Trophy size={28} color="#fbbf24" />
-          <Text className="text-white text-2xl font-bold">Weekly Leaderboard</Text>
+          <Text className="text-white text-2xl font-bold">Leaderboard</Text>
         </View>
         <Text className="text-white/80 text-sm">
-          Top creators by engagement this week
+          Top creators by engagement
         </Text>
 
         {/* Timeframe toggle */}
@@ -134,180 +158,190 @@ export default function LeaderboardScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top 3 Podium */}
-        {topThree.length > 0 && (
-          <Animated.View style={topAnimatedStyle} className="px-4 mt-6 mb-6">
-            <View className="flex-row items-flex-end gap-2 justify-center">
-              {/* 2nd Place */}
-              {topThree[1] && (
-                <Animated.View entering={FadeInDown.delay(100)} className="flex-1 items-center">
-                  <View className="bg-gray-200 rounded-2xl p-4 w-full items-center mb-2">
-                    <Text className="text-4xl mb-2">🥈</Text>
-                    <Text className="text-gray-900 font-bold text-sm text-center">
-                      {topThree[1].user_name}
-                    </Text>
-                    <View className="flex-row items-center mt-2">
-                      <Flame size={14} color="#f97316" />
-                      <Text className="text-gray-700 font-semibold ml-1">
-                        {topThree[1].engagement_score}
-                      </Text>
-                    </View>
-                  </View>
-                  <View className="h-16 w-full bg-gray-200 rounded-t-lg items-center justify-center">
-                    <Text className="text-gray-600 font-bold">2</Text>
-                  </View>
-                </Animated.View>
-              )}
-
-              {/* 1st Place */}
-              {topThree[0] && (
-                <Animated.View entering={FadeInUp} className="flex-1 items-center">
-                  <LinearGradient
-                    colors={['#fbbf24', '#f59e0b']}
-                    className="rounded-2xl p-4 w-full items-center mb-2"
-                  >
-                    <Text className="text-5xl mb-2">🥇</Text>
-                    <Text className="text-amber-900 font-bold text-center">
-                      {topThree[0].user_name}
-                    </Text>
-                    <View className="flex-row items-center mt-2 bg-white/30 rounded-full px-2 py-1">
-                      <Flame size={16} color="#b45309" />
-                      <Text className="text-amber-900 font-bold ml-1">
-                        {topThree[0].engagement_score}
-                      </Text>
-                    </View>
-                  </LinearGradient>
-                  <LinearGradient
-                    colors={['#fbbf24', '#f59e0b']}
-                    className="h-24 w-full rounded-t-lg items-center justify-center"
-                  >
-                    <Text className="text-white font-bold text-2xl">1</Text>
-                  </LinearGradient>
-                </Animated.View>
-              )}
-
-              {/* 3rd Place */}
-              {topThree[2] && (
-                <Animated.View entering={FadeInDown.delay(200)} className="flex-1 items-center">
-                  <View className="bg-orange-100 rounded-2xl p-4 w-full items-center mb-2">
-                    <Text className="text-4xl mb-2">🥉</Text>
-                    <Text className="text-orange-900 font-bold text-sm text-center">
-                      {topThree[2].user_name}
-                    </Text>
-                    <View className="flex-row items-center mt-2">
-                      <Flame size={14} color="#f97316" />
-                      <Text className="text-orange-700 font-semibold ml-1">
-                        {topThree[2].engagement_score}
-                      </Text>
-                    </View>
-                  </View>
-                  <View className="h-12 w-full bg-orange-100 rounded-t-lg items-center justify-center">
-                    <Text className="text-orange-600 font-bold">3</Text>
-                  </View>
-                </Animated.View>
-              )}
-            </View>
-          </Animated.View>
-        )}
-
-        {/* Stats Info */}
-        <Animated.View
-          entering={FadeInDown.delay(300)}
-          className="mx-4 mb-6 bg-white rounded-xl p-4 flex-row gap-3"
-        >
-          <View className="flex-1 items-center py-2">
-            <View className="flex-row items-center">
-              <TrendingUp size={16} color="#059669" />
-              <Text className="text-gray-900 font-bold text-lg ml-1">
-                {topThree[0]?.engagement_score ?? 0}
-              </Text>
-            </View>
-            <Text className="text-gray-500 text-xs mt-1">Top Score</Text>
-          </View>
-          <View className="w-px bg-gray-200" />
-          <View className="flex-1 items-center py-2">
-            <View className="flex-row items-center">
-              <Trophy size={16} color="#059669" />
-              <Text className="text-gray-900 font-bold text-lg ml-1">
-                {leaderboard.length}
-              </Text>
-            </View>
-            <Text className="text-gray-500 text-xs mt-1">Total Creators</Text>
-          </View>
-        </Animated.View>
-
-        {/* Rest of Leaderboard */}
-        {restOfLeaderboard.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(400)} className="px-4">
-            <Text className="text-gray-900 font-bold text-lg mb-3">Rankings</Text>
-            <View className="bg-white rounded-xl overflow-hidden">
-              {restOfLeaderboard.map((entry, index) => (
-                <Animated.View
-                  key={entry.user_id}
-                  entering={FadeInDown.delay(400 + (index + 1) * 50)}
-                  className={cn(
-                    'p-4 flex-row items-center',
-                    index > 0 && 'border-t border-gray-100'
-                  )}
-                >
-                  {/* Rank */}
-                  <View className="w-10 h-10 rounded-full bg-emerald-100 items-center justify-center mr-3">
-                    <Text className="text-emerald-700 font-bold text-sm">
-                      #{entry.rank}
-                    </Text>
-                  </View>
-
-                  {/* Info */}
-                  <View className="flex-1">
-                    <Text className="text-gray-900 font-semibold">
-                      {entry.user_name}
-                    </Text>
-                    <View className="flex-row items-center gap-2 mt-1">
-                      {entry.user_skills.slice(0, 2).map((skill) => (
-                        <View
-                          key={skill}
-                          className="bg-emerald-100 rounded-full px-2 py-0.5"
-                        >
-                          <Text className="text-emerald-700 text-xs font-medium">
-                            {skill}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Score */}
-                  <View className="items-end">
-                    <View className="flex-row items-center">
-                      <Flame size={16} color="#f97316" />
-                      <Text className="text-gray-900 font-bold ml-1">
-                        {entry.engagement_score}
-                      </Text>
-                    </View>
-                    <Text className="text-gray-500 text-xs mt-1">
-                      {entry.total_views} views
-                    </Text>
-                  </View>
-                </Animated.View>
-              ))}
-            </View>
-          </Animated.View>
-        )}
-
         {/* Empty State */}
-        {leaderboard.length === 0 && !loading && (
+        {leaderboard.length === 0 ? (
           <Animated.View
             entering={FadeInDown}
-            className="flex-1 items-center justify-center px-6 py-20"
+            className="flex-1 items-center justify-center px-6 py-16"
           >
-            <Trophy size={48} color="#d1d5db" />
-            <Text className="text-gray-400 text-lg font-semibold mt-4">
-              No leaderboard data yet
+            <View className="w-20 h-20 rounded-full bg-amber-100 items-center justify-center mb-4">
+              <Trophy size={36} color="#f59e0b" />
+            </View>
+            <Text className="text-gray-900 text-xl font-bold mb-2">
+              No rankings yet
             </Text>
-            <Text className="text-gray-400 text-sm text-center mt-2">
-              Engage with posts to climb the rankings!
+            <Text className="text-gray-500 text-sm text-center mb-6">
+              Post your work and engage with others to climb the leaderboard!
             </Text>
+            <Pressable
+              onPress={() => router.push('/(tabs)/create')}
+              className="bg-emerald-500 rounded-full px-6 py-3"
+            >
+              <Text className="text-white font-semibold">Post Your Work</Text>
+            </Pressable>
           </Animated.View>
+        ) : (
+          <>
+            {/* Top 3 Podium */}
+            {topThree.length > 0 && (
+              <Animated.View style={topAnimatedStyle} className="px-4 mt-6 mb-6">
+                <View className="flex-row items-end gap-2 justify-center">
+                  {/* 2nd Place */}
+                  {topThree[1] && (
+                    <Animated.View entering={FadeInDown.delay(100)} className="flex-1 items-center">
+                      <View className="bg-gray-200 rounded-2xl p-4 w-full items-center mb-2">
+                        <Text className="text-4xl mb-2">🥈</Text>
+                        <Text className="text-gray-900 font-bold text-sm text-center" numberOfLines={1}>
+                          {topThree[1].userName}
+                        </Text>
+                        <View className="flex-row items-center mt-2">
+                          <Flame size={14} color="#f97316" />
+                          <Text className="text-gray-700 font-semibold ml-1">
+                            {topThree[1].engagementScore}
+                          </Text>
+                        </View>
+                      </View>
+                      <View className="h-16 w-full bg-gray-200 rounded-t-lg items-center justify-center">
+                        <Text className="text-gray-600 font-bold">2</Text>
+                      </View>
+                    </Animated.View>
+                  )}
+
+                  {/* 1st Place */}
+                  {topThree[0] && (
+                    <Animated.View entering={FadeInUp} className="flex-1 items-center">
+                      <LinearGradient
+                        colors={['#fbbf24', '#f59e0b']}
+                        style={{ borderRadius: 16, padding: 16, width: '100%', alignItems: 'center', marginBottom: 8 }}
+                      >
+                        <Text className="text-5xl mb-2">🥇</Text>
+                        <Text className="text-amber-900 font-bold text-center" numberOfLines={1}>
+                          {topThree[0].userName}
+                        </Text>
+                        <View className="flex-row items-center mt-2 bg-white/30 rounded-full px-2 py-1">
+                          <Flame size={16} color="#b45309" />
+                          <Text className="text-amber-900 font-bold ml-1">
+                            {topThree[0].engagementScore}
+                          </Text>
+                        </View>
+                      </LinearGradient>
+                      <LinearGradient
+                        colors={['#fbbf24', '#f59e0b']}
+                        style={{ height: 96, width: '100%', borderTopLeftRadius: 8, borderTopRightRadius: 8, alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Text className="text-white font-bold text-2xl">1</Text>
+                      </LinearGradient>
+                    </Animated.View>
+                  )}
+
+                  {/* 3rd Place */}
+                  {topThree[2] && (
+                    <Animated.View entering={FadeInDown.delay(200)} className="flex-1 items-center">
+                      <View className="bg-orange-100 rounded-2xl p-4 w-full items-center mb-2">
+                        <Text className="text-4xl mb-2">🥉</Text>
+                        <Text className="text-orange-900 font-bold text-sm text-center" numberOfLines={1}>
+                          {topThree[2].userName}
+                        </Text>
+                        <View className="flex-row items-center mt-2">
+                          <Flame size={14} color="#f97316" />
+                          <Text className="text-orange-700 font-semibold ml-1">
+                            {topThree[2].engagementScore}
+                          </Text>
+                        </View>
+                      </View>
+                      <View className="h-12 w-full bg-orange-100 rounded-t-lg items-center justify-center">
+                        <Text className="text-orange-600 font-bold">3</Text>
+                      </View>
+                    </Animated.View>
+                  )}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Stats Info */}
+            <Animated.View
+              entering={FadeInDown.delay(300)}
+              className="mx-4 mb-6 bg-white rounded-xl p-4 flex-row gap-3"
+            >
+              <View className="flex-1 items-center py-2">
+                <View className="flex-row items-center">
+                  <TrendingUp size={16} color="#059669" />
+                  <Text className="text-gray-900 font-bold text-lg ml-1">
+                    {topThree[0]?.engagementScore ?? 0}
+                  </Text>
+                </View>
+                <Text className="text-gray-500 text-xs mt-1">Top Score</Text>
+              </View>
+              <View className="w-px bg-gray-200" />
+              <View className="flex-1 items-center py-2">
+                <View className="flex-row items-center">
+                  <Trophy size={16} color="#059669" />
+                  <Text className="text-gray-900 font-bold text-lg ml-1">
+                    {leaderboard.length}
+                  </Text>
+                </View>
+                <Text className="text-gray-500 text-xs mt-1">Total Creators</Text>
+              </View>
+            </Animated.View>
+
+            {/* Rest of Leaderboard */}
+            {restOfLeaderboard.length > 0 && (
+              <Animated.View entering={FadeInDown.delay(400)} className="px-4">
+                <Text className="text-gray-900 font-bold text-lg mb-3">Rankings</Text>
+                <View className="bg-white rounded-xl overflow-hidden">
+                  {restOfLeaderboard.map((entry, index) => (
+                    <Pressable
+                      key={entry.userId}
+                      onPress={() => router.push(`/profile/${entry.userId}`)}
+                      className={cn(
+                        'p-4 flex-row items-center active:bg-gray-50',
+                        index > 0 && 'border-t border-gray-100'
+                      )}
+                    >
+                      {/* Rank */}
+                      <View className="w-10 h-10 rounded-full bg-emerald-100 items-center justify-center mr-3">
+                        <Text className="text-emerald-700 font-bold text-sm">
+                          #{entry.rank}
+                        </Text>
+                      </View>
+
+                      {/* Info */}
+                      <View className="flex-1">
+                        <Text className="text-gray-900 font-semibold">
+                          {entry.userName}
+                        </Text>
+                        <View className="flex-row items-center gap-2 mt-1">
+                          {entry.userSkills.slice(0, 2).map((skill) => (
+                            <View
+                              key={skill}
+                              className="bg-emerald-100 rounded-full px-2 py-0.5"
+                            >
+                              <Text className="text-emerald-700 text-xs font-medium">
+                                {skill}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* Score */}
+                      <View className="items-end">
+                        <View className="flex-row items-center">
+                          <Flame size={16} color="#f97316" />
+                          <Text className="text-gray-900 font-bold ml-1">
+                            {entry.engagementScore}
+                          </Text>
+                        </View>
+                        <Text className="text-gray-500 text-xs mt-1">
+                          {entry.totalViews} views
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </Animated.View>
+            )}
+          </>
         )}
 
         {/* Info card */}
@@ -320,7 +354,7 @@ export default function LeaderboardScreen() {
               • Views = 1 point{'\n'}
               • Shares = 2 points{'\n'}
               • Endorsements = 3 points{'\n'}
-              Leaderboard resets weekly on Monday
+              Post quality work and engage with the community!
             </Text>
           </View>
         </Animated.View>

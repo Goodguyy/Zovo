@@ -106,9 +106,9 @@ export function PostCard({ post, index = 0, onShare, onVisible }: PostCardProps)
 
   if (!profile) return null;
 
-  // Use real-time counts, fallback to post data for initial render
-  const displayViewCount = viewCount || post.viewCount;
-  const displayShareCount = shareCount || post.shareCount;
+  // Use real-time counts from engagement system
+  const displayViewCount = viewCount;
+  const displayShareCount = shareCount;
 
   return (
     <Animated.View

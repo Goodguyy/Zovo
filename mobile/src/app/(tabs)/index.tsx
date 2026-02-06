@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, RefreshControl, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Filter, X, TrendingUp } from 'lucide-react-native';
+import { Filter, X, TrendingUp, Camera } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, SlideInDown } from 'react-native-reanimated';
 import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS } from '@/lib/store';
 import { recordShare } from '@/lib/engagement';
@@ -12,8 +13,10 @@ import * as Haptics from 'expo-haptics';
 
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const posts = useAppStore((s) => s.posts);
   const currentUser = useAppStore((s) => s.currentUser);
+  const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
@@ -237,22 +240,40 @@ export default function FeedScreen() {
         {filteredPosts.length === 0 ? (
           <Animated.View
             entering={FadeInDown}
-            className="flex-1 items-center justify-center py-20"
+            className="flex-1 items-center justify-center py-16"
           >
-            <Text className="text-gray-400 text-lg font-medium mb-2">
-              No posts found
+            <View className="w-20 h-20 rounded-full bg-emerald-100 items-center justify-center mb-4">
+              <Camera size={36} color="#059669" />
+            </View>
+            <Text className="text-gray-900 text-xl font-bold mb-2">
+              {hasFilters ? "No posts found" : "Welcome to Zovo!"}
             </Text>
-            <Text className="text-gray-400 text-sm text-center px-8">
+            <Text className="text-gray-500 text-sm text-center px-8 mb-6">
               {hasFilters
                 ? "Try adjusting your filters to see more results"
-                : "Be the first to post your work!"}
+                : "Be the first to showcase your work and connect with customers in your area."}
             </Text>
-            {hasFilters && (
+            {hasFilters ? (
               <Pressable
                 onPress={clearFilters}
-                className="mt-4 bg-emerald-500 rounded-full px-6 py-2.5"
+                className="bg-emerald-500 rounded-full px-6 py-3"
               >
                 <Text className="text-white font-semibold">Clear filters</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  if (isAuthenticated) {
+                    router.push('/(tabs)/create');
+                  } else {
+                    router.push('/auth');
+                  }
+                }}
+                className="bg-emerald-500 rounded-full px-6 py-3"
+              >
+                <Text className="text-white font-semibold">
+                  {isAuthenticated ? "Post Your First Work" : "Sign Up to Get Started"}
+                </Text>
               </Pressable>
             )}
           </Animated.View>

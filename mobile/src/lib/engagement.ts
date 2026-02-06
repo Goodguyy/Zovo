@@ -1,5 +1,5 @@
 /**
- * Real-time Engagement Tracking System for HustleWall
+ * Real-time Engagement Tracking System for Zovo
  *
  * This module provides real-time tracking for:
  * - Post views (unique per user with 30-min cooldown)
