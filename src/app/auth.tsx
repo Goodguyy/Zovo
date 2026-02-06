@@ -25,14 +25,8 @@ import {
 } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, SlideInUp, FadeOut } from 'react-native-reanimated';
 import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS, generateId } from '@/lib/store';
-import {
-  sendOTP,
-  verifyOTP,
-  formatNigerianPhone,
-  isValidNigerianPhone,
-  getCarrierHint,
-  isFirebaseConfigured,
-} from '@/lib/firebase-mock';
+import { sendOTP, verifyOTP } from '@/lib/otp-service';
+import { normalizePhoneNumber, detectNigerianCarrier, isBestBulkSMSConfigured } from '@/lib/bestbulksms';
 import { cn } from '@/lib/cn';
 
 type Step = 'phone' | 'otp' | 'profile';
@@ -76,11 +70,33 @@ export default function AuthScreen() {
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [verifiedUid, setVerifiedUid] = useState<string | null>(null);
 
+  // Helper function to format phone number for Nigerian users
+  const formatNigerianPhone = (input: string): string => {
+    const digits = input.replace(/\D/g, '');
+    if (digits.startsWith('234') && digits.length === 13) {
+      return `+${digits}`;
+    } else if (digits.startsWith('0') && digits.length === 11) {
+      return `+234${digits.slice(1)}`;
+    } else if (digits.length === 10 && !digits.startsWith('0')) {
+      return `+234${digits}`;
+    }
+    if (!digits.startsWith('234')) {
+      return `+234${digits}`;
+    }
+    return `+${digits}`;
+  };
+
+  // Validate Nigerian phone number
+  const isValidNigerianPhone = (phone: string): boolean => {
+    const formatted = formatNigerianPhone(phone);
+    return /^\+234[789][01][0-9]{8}$/.test(formatted);
+  };
+
   // Update carrier hint as user types
   useEffect(() => {
     if (phone.length >= 4) {
       const formatted = formatNigerianPhone(phone);
-      setCarrierHint(getCarrierHint(formatted));
+      setCarrierHint(detectNigerianCarrier(formatted));
     } else {
       setCarrierHint(null);
     }
@@ -117,15 +133,20 @@ export default function AuthScreen() {
     setIsLoading(true);
 
     try {
-      const result = await sendOTP(formattedPhone);
-      setVerificationId(result.verificationId);
+      const result = await sendOTP({ phone_number: formattedPhone });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send OTP');
+      }
+
+      setVerificationId(formattedPhone); // Use phone as verification ID
       setVerifiedPhone(formattedPhone);
       setWhatsapp(formattedPhone);
       setResendTimer(30);
       setStep('otp');
 
-      // Show dev mode hint if Firebase isn't configured
-      if (!isFirebaseConfigured()) {
+      // Show demo mode hint if BestBulkSMS isn't configured
+      if (!isBestBulkSMSConfigured()) {
         setError({
           message: 'Demo mode: Enter any 6 digits or use 123456',
           type: 'info',
@@ -179,7 +200,7 @@ export default function AuthScreen() {
       return;
     }
 
-    if (!verificationId) {
+    if (!verifiedPhone) {
       setError({
         message: 'Session expired. Please request a new code.',
         type: 'error',
@@ -191,13 +212,19 @@ export default function AuthScreen() {
     setIsLoading(true);
 
     try {
-      const result = await verifyOTP(verificationId, otpCode);
+      const result = await verifyOTP({ phone_number: verifiedPhone, otp_code: otpCode });
 
-      setVerifiedUid(result.user.uid);
+      if (!result.success) {
+        throw new Error(result.error || 'Verification failed');
+      }
+
+      // Generate a user ID from phone number
+      const generatedUid = `user_${verifiedPhone.replace(/\+/g, '')}`;
+      setVerifiedUid(generatedUid);
 
       // Check if user already has a profile
       const existingProfile = profiles.find(
-        (p) => p.phone === result.user.phoneNumber
+        (p) => p.phone === verifiedPhone
       );
 
       if (existingProfile) {
@@ -229,8 +256,12 @@ export default function AuthScreen() {
     setOtp(['', '', '', '', '', '']);
 
     try {
-      const result = await sendOTP(verifiedPhone);
-      setVerificationId(result.verificationId);
+      const result = await sendOTP({ phone_number: verifiedPhone });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to resend OTP');
+      }
+
       setResendTimer(30);
       setError({
         message: 'New code sent!',
