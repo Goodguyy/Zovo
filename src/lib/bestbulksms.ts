@@ -1,28 +1,20 @@
 /**
- * BestBulkSMS Integration for HustleWall OTP
+ * BestBulkSMS Integration for ZOVO OTP
  *
  * Handles SMS delivery via BestBulkSMS API
- * API Docs: https://www.bestbulksms.com/api-documentation
+ * Routes through Supabase Edge Function to avoid CORS on web
  */
 
-// Configuration - hardcode the API key since env vars aren't loading properly
+import { supabase } from './supabase';
+
+// Configuration
 const BESTBULKSMS_API_KEY = 'c176e532934d12ea1da3d800376a00b116fe08a3908b8e8fd9ce285911fc94e5';
 const BESTBULKSMS_API_URL = 'https://www.bestbulksms.com.ng/api/sms/send';
 const BESTBULKSMS_SENDER_ID = 'ZOVO';
 
 // Log configuration on startup
 console.log('[BestBulkSMS] === Configuration ===');
-console.log('[BestBulkSMS] API Key configured: YES');
-console.log('[BestBulkSMS] API URL:', BESTBULKSMS_API_URL);
 console.log('[BestBulkSMS] Sender ID:', BESTBULKSMS_SENDER_ID);
-
-if (!BESTBULKSMS_API_KEY) {
-  console.warn(
-    'BestBulkSMS API key not configured. OTP will work in demo mode (check LOGS tab for codes).'
-  );
-} else {
-  console.log('[BestBulkSMS] API key is set and ready');
-}
 
 // Types
 export interface SendSMSRequest {
@@ -47,21 +39,12 @@ export interface BestBulkSMSErrorResponse {
 }
 
 /**
- * Send SMS via BestBulkSMS API
- * @param request Send SMS request object
- * @returns Send SMS response
+ * Send SMS via Supabase Edge Function (avoids CORS issues on web)
+ * Falls back to direct API call on native
  */
 export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse> => {
   console.log('[SMS] === sendSMS called ===');
   console.log('[SMS] Request:', JSON.stringify(request));
-
-  if (!BESTBULKSMS_API_KEY) {
-    console.log('[SMS] ERROR: No API key configured');
-    return {
-      success: false,
-      error: 'BestBulkSMS API key not configured',
-    };
-  }
 
   try {
     // Validate phone number format
@@ -74,19 +57,74 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
       };
     }
 
-    // Prepare JSON request body
+    const smsPayload = {
+      to: phoneNumber,
+      body: request.message,
+      from: request.sender_id || BESTBULKSMS_SENDER_ID,
+      api_key: BESTBULKSMS_API_KEY,
+      api_url: BESTBULKSMS_API_URL,
+    };
+
+    console.log('[SMS] Sending to:', phoneNumber);
+    console.log('[SMS] From:', smsPayload.from);
+
+    // Try to send via Supabase Edge Function first (works on web)
+    console.log('[SMS] Calling Supabase send_sms function...');
+
+    const { data, error } = await supabase.functions.invoke('send-sms', {
+      body: smsPayload,
+    });
+
+    if (error) {
+      console.log('[SMS] Supabase function error:', error.message);
+      // Fall back to direct API call (works on native/Android)
+      return sendSMSDirect(request);
+    }
+
+    console.log('[SMS] Supabase function response:', JSON.stringify(data));
+
+    if (data?.success) {
+      console.log('[SMS] SUCCESS! SMS sent via Supabase');
+      return {
+        success: true,
+        message: 'SMS sent successfully',
+        response: data,
+      };
+    } else {
+      console.log('[SMS] Supabase function returned error, trying direct...');
+      return sendSMSDirect(request);
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.log('[SMS] Error, trying direct call:', errorMessage);
+    // Fall back to direct API call
+    return sendSMSDirect(request);
+  }
+};
+
+/**
+ * Direct SMS API call (works on native apps, blocked by CORS on web)
+ */
+const sendSMSDirect = async (request: SendSMSRequest): Promise<SendSMSResponse> => {
+  console.log('[SMS] Attempting direct API call...');
+
+  try {
+    const phoneNumber = normalizePhoneNumber(request.phone_number);
+    if (!phoneNumber) {
+      return {
+        success: false,
+        error: 'Invalid phone number format',
+      };
+    }
+
     const body = {
       to: phoneNumber,
       body: request.message,
       from: request.sender_id || BESTBULKSMS_SENDER_ID,
     };
 
-    console.log('[SMS] Sending to:', phoneNumber);
-    console.log('[SMS] From:', body.from);
-    console.log('[SMS] API URL:', BESTBULKSMS_API_URL);
-    console.log('[SMS] Making fetch request...');
+    console.log('[SMS] Direct call to:', BESTBULKSMS_API_URL);
 
-    // Make API request with Bearer auth
     const response = await fetch(BESTBULKSMS_API_URL, {
       method: 'POST',
       headers: {
@@ -96,13 +134,11 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
       body: JSON.stringify(body),
     });
 
-    console.log('[SMS] Response status:', response.status);
+    console.log('[SMS] Direct response status:', response.status);
     const responseData = await response.json();
-    console.log('[SMS] Response data:', JSON.stringify(responseData));
+    console.log('[SMS] Direct response data:', JSON.stringify(responseData));
 
-    // Check response status
     if (!response.ok || responseData.status !== 'ok') {
-      console.log('[SMS] API returned error');
       return {
         success: false,
         error: responseData.message || 'Failed to send SMS',
@@ -111,7 +147,7 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
       };
     }
 
-    console.log('[SMS] SUCCESS! SMS sent to', phoneNumber);
+    console.log('[SMS] SUCCESS! SMS sent directly');
     return {
       success: true,
       message: 'SMS sent successfully',
@@ -121,7 +157,7 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.log('[SMS] CATCH ERROR:', errorMessage);
+    console.log('[SMS] Direct call FAILED:', errorMessage);
     return {
       success: false,
       error: `SMS sending failed: ${errorMessage}`,
