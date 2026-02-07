@@ -44,8 +44,16 @@
 </routes>
 
 <database>
-  No database is configured by default.
-  If the user needs to persist data or have user accounts, use the database-auth skill and then update this file to reflect the changes.
+  **IMPORTANT: This project uses Supabase for all database and auth needs.**
+
+  DO NOT use the local SQLite/Prisma setup. Instead:
+  - Use Supabase PostgreSQL for data storage
+  - Use Supabase Auth for authentication
+  - Use Supabase Storage for file uploads
+
+  If backend API routes need to interact with Supabase, use the Supabase JS client with the service role key for server-side operations.
+
+  See the root /CLAUDE.md file for detailed Supabase implementation guidelines.
 </database>
 
 <package_management>
