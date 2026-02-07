@@ -57,7 +57,6 @@ serve(async (req) => {
     console.log("[send-sms] Received request for:", requestBody.to)
 
     const apiKey = requestBody.api_key || Deno.env.get("BESTBULKSMS_API_KEY")
-    const apiUrl = requestBody.api_url || "https://www.bestbulksms.com.ng/api/sms/send"
 
     if (!apiKey) {
       return new Response(
@@ -73,45 +72,92 @@ serve(async (req) => {
       )
     }
 
-    // BestBulkSMS API uses 'message' and 'sender' fields
+    const phoneNumber = requestBody.to
+    const message = requestBody.body
+    const sender = requestBody.from || "ZOVO"
+
+    // Try BestBulkSMS API with api_key in the payload (common Nigerian SMS API format)
     const smsPayload = {
-      to: requestBody.to,
-      message: requestBody.body,
-      sender: requestBody.from || "ZOVO",
+      api_key: apiKey,
+      to: phoneNumber,
+      from: sender,
+      sms: message,
+      type: "plain",
+      channel: "generic",
     }
 
-    console.log("[send-sms] Sending to BestBulkSMS:", smsPayload.to, "sender:", smsPayload.sender)
+    console.log("[send-sms] Sending to BestBulkSMS - to:", phoneNumber, "from:", sender)
 
-    const response = await fetch(apiUrl, {
+    // Try the API endpoint with JSON body containing api_key
+    const response = await fetch("https://www.bestbulksms.com.ng/api/v2/sms/send", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer " + apiKey,
         "Content-Type": "application/json",
+        "Accept": "application/json",
       },
       body: JSON.stringify(smsPayload),
     })
 
     const responseText = await response.text()
-    console.log("[send-sms] BestBulkSMS raw response:", responseText)
+    console.log("[send-sms] Response status:", response.status)
+    console.log("[send-sms] Raw response:", responseText)
 
     let responseData
     try {
       responseData = JSON.parse(responseText)
     } catch (e) {
-      console.log("[send-sms] Failed to parse response as JSON")
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Invalid response from SMS provider: " + responseText.substring(0, 200),
-          raw_response: responseText
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      )
+      // If v2 fails, try v1 endpoint with Bearer auth
+      console.log("[send-sms] v2 failed, trying v1 with Bearer auth...")
+
+      const v1Payload = {
+        to: phoneNumber,
+        message: message,
+        sender: sender,
+      }
+
+      const v1Response = await fetch("https://www.bestbulksms.com.ng/api/sms/send", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + apiKey,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify(v1Payload),
+      })
+
+      const v1Text = await v1Response.text()
+      console.log("[send-sms] v1 response status:", v1Response.status)
+      console.log("[send-sms] v1 raw response:", v1Text)
+
+      if (!v1Text || v1Text.trim() === "") {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "SMS API returned empty response. Please verify API key and account status at bestbulksms.com.ng",
+            debug: { v2_response: responseText, v1_response: v1Text }
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
+
+      try {
+        responseData = JSON.parse(v1Text)
+      } catch (e2) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Invalid response from SMS provider",
+            raw_response: v1Text.substring(0, 500)
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        )
+      }
     }
 
-    console.log("[send-sms] BestBulkSMS parsed response:", JSON.stringify(responseData))
+    console.log("[send-sms] Parsed response:", JSON.stringify(responseData))
 
-    if (responseData.status === "ok" || responseData.success) {
+    // Check various success indicators
+    if (responseData.status === "success" || responseData.status === "ok" || responseData.success === true || responseData.code === 200) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -125,7 +171,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: responseData.message || responseData.error || "SMS sending failed",
+        error: responseData.message || responseData.error || responseData.reason || "SMS sending failed",
         response: responseData,
       }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
