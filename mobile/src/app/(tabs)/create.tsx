@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, Image, Alert, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, Image, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Camera, ImagePlus, X, Check, MapPin, Briefcase } from 'lucide-react-native';
+import { Camera, ImagePlus, X, Check } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import Animated, { FadeIn, FadeInDown, SlideInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS } from '@/lib/store';
+import { useAppStore } from '@/lib/store';
 import { createPost } from '@/lib/services/supabaseService';
+import { LocationPicker } from '@/components/LocationPicker';
+import { SkillsPicker } from '@/components/SkillsPicker';
 import { cn } from '@/lib/cn';
 
 export default function CreatePostScreen() {
@@ -20,9 +22,13 @@ export default function CreatePostScreen() {
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [selectedArea, setSelectedArea] = useState<string | null>(null);
-  const [showSkillPicker, setShowSkillPicker] = useState(false);
-  const [showAreaPicker, setShowAreaPicker] = useState(false);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+
+  // Build area string for post
+  const selectedArea = selectedCity && selectedState
+    ? `${selectedCity}, ${selectedState}`
+    : selectedCity || selectedState || null;
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -58,14 +64,6 @@ export default function CreatePostScreen() {
 
     if (!result.canceled) {
       setMediaUri(result.assets[0].uri);
-    }
-  };
-
-  const toggleSkill = (skill: string) => {
-    if (selectedSkills.includes(skill)) {
-      setSelectedSkills(selectedSkills.filter((s) => s !== skill));
-    } else if (selectedSkills.length < 3) {
-      setSelectedSkills([...selectedSkills, skill]);
     }
   };
 
@@ -112,13 +110,14 @@ export default function CreatePostScreen() {
     setMediaUri(null);
     setCaption('');
     setSelectedSkills([]);
-    setSelectedArea(null);
+    setSelectedState(null);
+    setSelectedCity(null);
 
     // Navigate to feed
     router.push('/(tabs)');
   };
 
-  const canPost = mediaUri && selectedSkills.length > 0 && selectedArea;
+  const canPost = mediaUri && selectedSkills.length > 0 && selectedArea && !isPosting;
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -141,15 +140,21 @@ export default function CreatePostScreen() {
               canPost ? "bg-white" : "bg-white/30"
             )}
           >
-            <Check size={18} color={canPost ? "#059669" : "#fff"} />
-            <Text
-              className={cn(
-                "ml-1.5 font-semibold",
-                canPost ? "text-emerald-600" : "text-white/70"
-              )}
-            >
-              Post
-            </Text>
+            {isPosting ? (
+              <ActivityIndicator size="small" color="#059669" />
+            ) : (
+              <>
+                <Check size={18} color={canPost ? "#059669" : "#fff"} />
+                <Text
+                  className={cn(
+                    "ml-1.5 font-semibold",
+                    canPost ? "text-emerald-600" : "text-white/70"
+                  )}
+                >
+                  Post
+                </Text>
+              </>
+            )}
           </Pressable>
         </View>
       </LinearGradient>
@@ -158,6 +163,7 @@ export default function CreatePostScreen() {
         className="flex-1"
         contentContainerStyle={{ padding: 16 }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Auth check */}
         {!isAuthenticated && (
@@ -247,128 +253,30 @@ export default function CreatePostScreen() {
 
         {/* Skills */}
         <Animated.View entering={FadeInDown.delay(300)} className="mb-4">
-          <Text className="text-gray-900 font-semibold mb-2">
-            Skill Tags * (max 3)
-          </Text>
-          <Pressable
-            onPress={() => setShowSkillPicker(!showSkillPicker)}
-            className="bg-white rounded-xl p-4 flex-row items-center justify-between"
-          >
-            <View className="flex-row flex-wrap gap-2 flex-1">
-              {selectedSkills.length > 0 ? (
-                selectedSkills.map((skill) => (
-                  <View
-                    key={skill}
-                    className="bg-emerald-100 rounded-full px-3 py-1.5 flex-row items-center"
-                  >
-                    <Text className="text-emerald-700 text-sm font-medium">
-                      {skill}
-                    </Text>
-                    <Pressable
-                      onPress={() => toggleSkill(skill)}
-                      className="ml-1.5"
-                    >
-                      <X size={14} color="#047857" />
-                    </Pressable>
-                  </View>
-                ))
-              ) : (
-                <Text className="text-gray-400">Select your skills...</Text>
-              )}
-            </View>
-            <Briefcase size={20} color="#6b7280" />
-          </Pressable>
-
-          {showSkillPicker && (
-            <Animated.View
-              entering={SlideInUp.springify()}
-              className="bg-white rounded-xl mt-2 p-4 max-h-48"
-            >
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View className="flex-row flex-wrap gap-2">
-                  {SKILL_TAGS.map((skill) => (
-                    <Pressable
-                      key={skill}
-                      onPress={() => toggleSkill(skill)}
-                      disabled={selectedSkills.length >= 3 && !selectedSkills.includes(skill)}
-                      className={cn(
-                        "px-3 py-2 rounded-full border",
-                        selectedSkills.includes(skill)
-                          ? "bg-emerald-500 border-emerald-500"
-                          : "bg-white border-gray-200",
-                        selectedSkills.length >= 3 && !selectedSkills.includes(skill)
-                          ? "opacity-40"
-                          : ""
-                      )}
-                    >
-                      <Text
-                        className={cn(
-                          "text-sm font-medium",
-                          selectedSkills.includes(skill)
-                            ? "text-white"
-                            : "text-gray-700"
-                        )}
-                      >
-                        {skill}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
-            </Animated.View>
-          )}
+          <SkillsPicker
+            selectedSkills={selectedSkills}
+            onSkillsChange={setSelectedSkills}
+            label="Skill Tags"
+            required
+            maxSkills={3}
+            allowCustom={true}
+          />
         </Animated.View>
 
         {/* Area */}
         <Animated.View entering={FadeInDown.delay(400)} className="mb-4">
-          <Text className="text-gray-900 font-semibold mb-2">
-            Service Area * (broad location only)
+          <LocationPicker
+            state={selectedState}
+            city={selectedCity}
+            onStateChange={setSelectedState}
+            onCityChange={setSelectedCity}
+            label="Service Area"
+            required
+            allowCustom={true}
+          />
+          <Text className="text-gray-400 text-xs mt-1">
+            Only your broad area is shown, never your precise location
           </Text>
-          <Pressable
-            onPress={() => setShowAreaPicker(!showAreaPicker)}
-            className="bg-white rounded-xl p-4 flex-row items-center justify-between"
-          >
-            <Text className={selectedArea ? "text-gray-900" : "text-gray-400"}>
-              {selectedArea || "Select your area..."}
-            </Text>
-            <MapPin size={20} color="#6b7280" />
-          </Pressable>
-
-          {showAreaPicker && (
-            <Animated.View
-              entering={SlideInUp.springify()}
-              className="bg-white rounded-xl mt-2 p-4 max-h-48"
-            >
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View className="flex-row flex-wrap gap-2">
-                  {NIGERIAN_AREAS.map((area) => (
-                    <Pressable
-                      key={area}
-                      onPress={() => {
-                        setSelectedArea(area);
-                        setShowAreaPicker(false);
-                      }}
-                      className={cn(
-                        "px-3 py-2 rounded-full border",
-                        selectedArea === area
-                          ? "bg-emerald-500 border-emerald-500"
-                          : "bg-white border-gray-200"
-                      )}
-                    >
-                      <Text
-                        className={cn(
-                          "text-sm font-medium",
-                          selectedArea === area ? "text-white" : "text-gray-700"
-                        )}
-                      >
-                        {area}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
-            </Animated.View>
-          )}
         </Animated.View>
 
         {/* Safety note */}
@@ -380,7 +288,7 @@ export default function CreatePostScreen() {
             Privacy Protected
           </Text>
           <Text className="text-blue-700 text-xs leading-5">
-            We only show your broad area (e.g., "Lekki"), never your precise
+            We only show your broad area (e.g., "Lekki, Lagos"), never your precise
             location. Customers will contact you via WhatsApp or phone.
           </Text>
         </Animated.View>

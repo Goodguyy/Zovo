@@ -16,18 +16,18 @@ import {
   ArrowLeft,
   Phone,
   User,
-  MapPin,
-  Briefcase,
   Check,
   X,
   AlertCircle,
   RefreshCw,
 } from 'lucide-react-native';
-import Animated, { FadeIn, FadeInDown, SlideInUp, FadeOut } from 'react-native-reanimated';
-import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS, generateId } from '@/lib/store';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import { useAppStore, generateId } from '@/lib/store';
 import { sendOTP, verifyOTP } from '@/lib/otp-service';
 import { createProfile, getProfileByPhone } from '@/lib/services/supabaseService';
 import { normalizePhoneNumber, detectNigerianCarrier, isBestBulkSMSConfigured } from '@/lib/bestbulksms';
+import { LocationPicker } from '@/components/LocationPicker';
+import { SkillsPicker } from '@/components/SkillsPicker';
 import { cn } from '@/lib/cn';
 
 type Step = 'phone' | 'otp' | 'profile';
@@ -61,9 +61,13 @@ export default function AuthScreen() {
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [selectedArea, setSelectedArea] = useState<string | null>(null);
-  const [showSkillPicker, setShowSkillPicker] = useState(false);
-  const [showAreaPicker, setShowAreaPicker] = useState(false);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+
+  // Build area string
+  const selectedArea = selectedCity && selectedState
+    ? `${selectedCity}, ${selectedState}`
+    : selectedCity || selectedState || null;
 
   // Verified user data
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
@@ -290,14 +294,6 @@ export default function AuthScreen() {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const toggleSkill = (skill: string) => {
-    if (selectedSkills.includes(skill)) {
-      setSelectedSkills(selectedSkills.filter((s) => s !== skill));
-    } else if (selectedSkills.length < 3) {
-      setSelectedSkills([...selectedSkills, skill]);
     }
   };
 
@@ -562,7 +558,7 @@ export default function AuthScreen() {
       <Text className="text-gray-900 text-2xl font-bold mb-2">Create your profile</Text>
       <Text className="text-gray-500 mb-6">This will be shown to potential customers</Text>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <ErrorBanner />
 
         {/* Name */}
@@ -601,125 +597,42 @@ export default function AuthScreen() {
 
         {/* Skills */}
         <View className="mb-4">
-          <Text className="text-gray-900 font-semibold mb-2">Your Skills * (max 3)</Text>
-          <Pressable
-            onPress={() => setShowSkillPicker(!showSkillPicker)}
-            className="bg-white rounded-xl p-4 flex-row items-center justify-between"
-          >
-            <View className="flex-row flex-wrap gap-2 flex-1">
-              {selectedSkills.length > 0 ? (
-                selectedSkills.map((skill) => (
-                  <View
-                    key={skill}
-                    className="bg-emerald-100 rounded-full px-3 py-1.5 flex-row items-center"
-                  >
-                    <Text className="text-emerald-700 text-sm font-medium">{skill}</Text>
-                    <Pressable onPress={() => toggleSkill(skill)} className="ml-1.5">
-                      <X size={14} color="#047857" />
-                    </Pressable>
-                  </View>
-                ))
-              ) : (
-                <Text className="text-gray-400">Select your skills...</Text>
-              )}
-            </View>
-            <Briefcase size={20} color="#6b7280" />
-          </Pressable>
-
-          {showSkillPicker && (
-            <Animated.View
-              entering={SlideInUp.springify()}
-              className="bg-white rounded-xl mt-2 p-4 max-h-48"
-            >
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View className="flex-row flex-wrap gap-2">
-                  {SKILL_TAGS.map((skill) => (
-                    <Pressable
-                      key={skill}
-                      onPress={() => toggleSkill(skill)}
-                      disabled={selectedSkills.length >= 3 && !selectedSkills.includes(skill)}
-                      className={cn(
-                        'px-3 py-2 rounded-full border',
-                        selectedSkills.includes(skill)
-                          ? 'bg-emerald-500 border-emerald-500'
-                          : 'bg-white border-gray-200',
-                        selectedSkills.length >= 3 &&
-                          !selectedSkills.includes(skill) &&
-                          'opacity-40'
-                      )}
-                    >
-                      <Text
-                        className={cn(
-                          'text-sm font-medium',
-                          selectedSkills.includes(skill) ? 'text-white' : 'text-gray-700'
-                        )}
-                      >
-                        {skill}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
-            </Animated.View>
-          )}
+          <SkillsPicker
+            selectedSkills={selectedSkills}
+            onSkillsChange={setSelectedSkills}
+            label="Your Skills"
+            required
+            maxSkills={3}
+            allowCustom={true}
+          />
         </View>
 
         {/* Area */}
         <View className="mb-6">
-          <Text className="text-gray-900 font-semibold mb-2">Service Area *</Text>
-          <Pressable
-            onPress={() => setShowAreaPicker(!showAreaPicker)}
-            className="bg-white rounded-xl p-4 flex-row items-center justify-between"
-          >
-            <Text className={selectedArea ? 'text-gray-900' : 'text-gray-400'}>
-              {selectedArea || 'Select your area...'}
-            </Text>
-            <MapPin size={20} color="#6b7280" />
-          </Pressable>
-
-          {showAreaPicker && (
-            <Animated.View
-              entering={SlideInUp.springify()}
-              className="bg-white rounded-xl mt-2 p-4 max-h-48"
-            >
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View className="flex-row flex-wrap gap-2">
-                  {NIGERIAN_AREAS.map((area) => (
-                    <Pressable
-                      key={area}
-                      onPress={() => {
-                        setSelectedArea(area);
-                        setShowAreaPicker(false);
-                      }}
-                      className={cn(
-                        'px-3 py-2 rounded-full border',
-                        selectedArea === area
-                          ? 'bg-emerald-500 border-emerald-500'
-                          : 'bg-white border-gray-200'
-                      )}
-                    >
-                      <Text
-                        className={cn(
-                          'text-sm font-medium',
-                          selectedArea === area ? 'text-white' : 'text-gray-700'
-                        )}
-                      >
-                        {area}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
-            </Animated.View>
-          )}
+          <LocationPicker
+            state={selectedState}
+            city={selectedCity}
+            onStateChange={setSelectedState}
+            onCityChange={setSelectedCity}
+            label="Service Area"
+            required
+            allowCustom={true}
+          />
         </View>
 
         <Pressable
           onPress={handleCreateProfile}
+          disabled={isLoading}
           className="bg-emerald-500 rounded-xl py-4 items-center flex-row justify-center mb-8 active:bg-emerald-600"
         >
-          <Check size={20} color="#fff" />
-          <Text className="text-white font-bold text-lg ml-2">Create Profile</Text>
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Check size={20} color="#fff" />
+              <Text className="text-white font-bold text-lg ml-2">Create Profile</Text>
+            </>
+          )}
         </Pressable>
       </ScrollView>
     </Animated.View>

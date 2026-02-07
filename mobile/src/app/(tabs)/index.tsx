@@ -3,13 +3,15 @@ import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndic
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Filter, X, TrendingUp, Camera } from 'lucide-react-native';
+import { Filter, X, TrendingUp, Camera, MapPin, Briefcase } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, SlideInDown } from 'react-native-reanimated';
-import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS } from '@/lib/store';
+import { useAppStore } from '@/lib/store';
 import { useSupabasePosts } from '@/lib/hooks/useSupabaseData';
 import { recordShare } from '@/lib/engagement';
 import { PostCard } from '@/components/PostCard';
 import { WebContainer } from '@/components/WebContainer';
+import { LocationPicker } from '@/components/LocationPicker';
+import { SkillsPicker } from '@/components/SkillsPicker';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
 
@@ -21,12 +23,21 @@ export default function FeedScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedArea, setSelectedArea] = useState<string | null>(null);
-  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+
+  // Build area filter from state + city
+  const selectedArea = selectedCity && selectedState
+    ? `${selectedCity}, ${selectedState}`
+    : selectedCity || selectedState || null;
+
+  // Build skill filter (use first selected skill for filtering)
+  const selectedSkill = selectedSkills.length > 0 ? selectedSkills[0] : null;
 
   // Fetch posts from Supabase
   const { posts, loading, refetch } = useSupabasePosts({
-    area: selectedArea || undefined,
+    area: selectedCity || selectedState || undefined,
     skill: selectedSkill || undefined,
   });
 
@@ -58,8 +69,9 @@ export default function FeedScreen() {
   };
 
   const clearFilters = () => {
-    setSelectedArea(null);
-    setSelectedSkill(null);
+    setSelectedState(null);
+    setSelectedCity(null);
+    setSelectedSkills([]);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
@@ -111,16 +123,18 @@ export default function FeedScreen() {
           >
             {selectedArea && (
               <View className="bg-white/20 rounded-full px-3 py-1.5 flex-row items-center">
-                <Text className="text-white text-xs font-medium">{selectedArea}</Text>
-                <Pressable onPress={() => setSelectedArea(null)} className="ml-1.5">
+                <MapPin size={12} color="#fff" />
+                <Text className="text-white text-xs font-medium ml-1">{selectedArea}</Text>
+                <Pressable onPress={() => { setSelectedState(null); setSelectedCity(null); }} className="ml-1.5">
                   <X size={14} color="#fff" />
                 </Pressable>
               </View>
             )}
             {selectedSkill && (
               <View className="bg-white/20 rounded-full px-3 py-1.5 flex-row items-center">
-                <Text className="text-white text-xs font-medium">{selectedSkill}</Text>
-                <Pressable onPress={() => setSelectedSkill(null)} className="ml-1.5">
+                <Briefcase size={12} color="#fff" />
+                <Text className="text-white text-xs font-medium ml-1">{selectedSkill}</Text>
+                <Pressable onPress={() => setSelectedSkills([])} className="ml-1.5">
                   <X size={14} color="#fff" />
                 </Pressable>
               </View>
@@ -135,76 +149,26 @@ export default function FeedScreen() {
           entering={SlideInDown.springify()}
           className="bg-white border-b border-gray-200 px-4 py-4"
         >
-          {/* Area filter */}
-          <Text className="text-gray-900 font-semibold mb-2">Filter by Area</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="mb-4"
-            style={{ flexGrow: 0 }}
-          >
-            <View className="flex-row gap-2">
-              {NIGERIAN_AREAS.slice(0, 12).map((area) => (
-                <Pressable
-                  key={area}
-                  onPress={() => {
-                    setSelectedArea(selectedArea === area ? null : area);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                  className={cn(
-                    "px-3 py-2 rounded-full border",
-                    selectedArea === area
-                      ? "bg-emerald-500 border-emerald-500"
-                      : "bg-white border-gray-200"
-                  )}
-                >
-                  <Text
-                    className={cn(
-                      "text-sm font-medium",
-                      selectedArea === area ? "text-white" : "text-gray-700"
-                    )}
-                  >
-                    {area}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
+          {/* Location filter */}
+          <LocationPicker
+            state={selectedState}
+            city={selectedCity}
+            onStateChange={setSelectedState}
+            onCityChange={setSelectedCity}
+            label="Filter by Location"
+            allowCustom={true}
+          />
 
           {/* Skill filter */}
-          <Text className="text-gray-900 font-semibold mb-2">Filter by Skill</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ flexGrow: 0 }}
-          >
-            <View className="flex-row gap-2">
-              {SKILL_TAGS.slice(0, 15).map((skill) => (
-                <Pressable
-                  key={skill}
-                  onPress={() => {
-                    setSelectedSkill(selectedSkill === skill ? null : skill);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                  className={cn(
-                    "px-3 py-2 rounded-full border",
-                    selectedSkill === skill
-                      ? "bg-emerald-500 border-emerald-500"
-                      : "bg-white border-gray-200"
-                  )}
-                >
-                  <Text
-                    className={cn(
-                      "text-sm font-medium",
-                      selectedSkill === skill ? "text-white" : "text-gray-700"
-                    )}
-                  >
-                    {skill}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
+          <View className="mt-4">
+            <SkillsPicker
+              selectedSkills={selectedSkills}
+              onSkillsChange={setSelectedSkills}
+              label="Filter by Skill"
+              singleSelect={true}
+              allowCustom={true}
+            />
+          </View>
 
           {/* Clear filters */}
           {hasFilters && (

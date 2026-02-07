@@ -4,10 +4,11 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Filter, X, TrendingUp, Camera, Eye, Share2, MapPin, BadgeCheck, Heart, ChevronRight } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS, formatTimeAgo } from '@/lib/store';
+import { useAppStore, formatTimeAgo } from '@/lib/store';
 import { useSupabasePosts, useSupabaseProfile, type AppPost } from '@/lib/hooks/useSupabaseData';
 import { recordShare } from '@/lib/engagement';
 import { useEngagement } from '@/lib/useEngagement';
+import { NIGERIAN_STATES, ALL_SKILLS } from '@/lib/nigerianData';
 
 // Web-specific post card component
 function WebPostCard({ post, onShare }: { post: AppPost; onShare: () => void }) {
@@ -176,7 +177,7 @@ export default function WebFeedScreen() {
             <View style={styles.filterSection}>
               <Text style={styles.filterLabel}>Area</Text>
               <View style={styles.filterOptions}>
-                {NIGERIAN_AREAS.slice(0, 8).map((area) => (
+                {NIGERIAN_STATES.slice(0, 8).map((area) => (
                   <Pressable
                     key={area}
                     onPress={() => setSelectedArea(selectedArea === area ? null : area)}
@@ -192,7 +193,7 @@ export default function WebFeedScreen() {
             <View style={styles.filterSection}>
               <Text style={styles.filterLabel}>Skills</Text>
               <View style={styles.filterOptions}>
-                {SKILL_TAGS.slice(0, 8).map((skill) => (
+                {ALL_SKILLS.slice(0, 8).map((skill) => (
                   <Pressable
                     key={skill}
                     onPress={() => setSelectedSkill(selectedSkill === skill ? null : skill)}
