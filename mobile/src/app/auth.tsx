@@ -25,7 +25,7 @@ import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useAppStore, generateId } from '@/lib/store';
 import { sendOTP, verifyOTP } from '@/lib/otp-service';
 import { createProfile, getProfileByPhone } from '@/lib/services/supabaseService';
-import { normalizePhoneNumber, detectNigerianCarrier, isBestBulkSMSConfigured } from '@/lib/bestbulksms';
+import { normalizePhoneNumber, detectNigerianCarrier } from '@/lib/bestbulksms';
 import { LocationPicker } from '@/components/LocationPicker';
 import { SkillsPicker } from '@/components/SkillsPicker';
 import { cn } from '@/lib/cn';
@@ -156,14 +156,6 @@ export default function AuthScreen() {
       setWhatsapp(formattedPhone);
       setResendTimer(30);
       setStep('otp');
-
-      // Show demo mode hint if BestBulkSMS isn't configured
-      if (!isBestBulkSMSConfigured()) {
-        setError({
-          message: 'Demo mode: Enter any 6 digits or use 123456',
-          type: 'info',
-        });
-      }
     } catch (err) {
       setError({
         message: err instanceof Error ? err.message : 'Failed to send OTP. Please try again.',

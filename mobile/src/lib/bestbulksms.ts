@@ -297,17 +297,9 @@ export const detectNigerianCarrier = (phoneNumber: string): string => {
   return 'Unknown';
 };
 
-/**
- * Check if API is configured
- */
-export const isBestBulkSMSConfigured = (): boolean => {
-  return !!BESTBULKSMS_API_KEY;
-};
-
 export default {
   sendSMS,
   sendOTPSMS,
   normalizePhoneNumber,
   detectNigerianCarrier,
-  isBestBulkSMSConfigured,
 };
