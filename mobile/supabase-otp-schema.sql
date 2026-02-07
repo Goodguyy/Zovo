@@ -101,21 +101,32 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Function to generate and store OTP
-CREATE OR REPLACE FUNCTION generate_otp(p_phone_number TEXT)
-RETURNS JSON AS $$
+CREATE OR REPLACE FUNCTION generate_otp(p_phone TEXT)
+RETURNS TABLE (
+  success BOOLEAN,
+  otp_code TEXT,
+  otp_id UUID,
+  message TEXT,
+  expires_at TEXT,
+  error TEXT
+) AS $$
 DECLARE
   v_otp_code TEXT;
   v_otp_id UUID;
   v_rate_limit JSON;
 BEGIN
   -- Check rate limit first
-  SELECT check_otp_rate_limit(p_phone_number) INTO v_rate_limit;
+  SELECT check_otp_rate_limit(p_phone) INTO v_rate_limit;
 
   IF NOT (v_rate_limit->>'allowed')::BOOLEAN THEN
-    RETURN json_build_object(
-      'success', false,
-      'error', v_rate_limit->>'error'
-    );
+    RETURN QUERY SELECT
+      FALSE::BOOLEAN,
+      NULL::TEXT,
+      NULL::UUID,
+      NULL::TEXT,
+      NULL::TEXT,
+      (v_rate_limit->>'error')::TEXT;
+    RETURN;
   END IF;
 
   -- Generate random 6-digit OTP
@@ -123,21 +134,22 @@ BEGIN
 
   -- Delete any existing unused OTPs for this number
   DELETE FROM otp_codes
-  WHERE phone_number = p_phone_number AND used = FALSE;
+  WHERE phone_number = p_phone AND used = FALSE;
 
   -- Insert new OTP (expires in 5 minutes)
   INSERT INTO otp_codes (phone_number, otp_code, expires_at)
-  VALUES (p_phone_number, v_otp_code, NOW() + INTERVAL '5 minutes')
+  VALUES (p_phone, v_otp_code, NOW() + INTERVAL '5 minutes')
   RETURNING id INTO v_otp_id;
 
-  RETURN json_build_object(
-    'success', true,
-    'otp_id', v_otp_id,
-    'message', 'OTP generated successfully',
-    'expires_at', (NOW() + INTERVAL '5 minutes')::TEXT
-  );
+  RETURN QUERY SELECT
+    TRUE::BOOLEAN,
+    v_otp_code::TEXT,
+    v_otp_id::UUID,
+    'OTP generated successfully'::TEXT,
+    (NOW() + INTERVAL '5 minutes')::TEXT,
+    NULL::TEXT;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to verify OTP
 CREATE OR REPLACE FUNCTION verify_otp(p_phone_number TEXT, p_otp_code TEXT)

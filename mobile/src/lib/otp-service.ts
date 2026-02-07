@@ -56,6 +56,9 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
       { p_phone: normalizedPhone }
     );
 
+    console.log('[OTP] Supabase raw result:', JSON.stringify(generateResult));
+    console.log('[OTP] Supabase error:', generateError ? JSON.stringify(generateError) : 'none');
+
     if (generateError) {
       console.log('[OTP] Supabase error:', generateError.message);
       return {
@@ -64,14 +67,14 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
       };
     }
 
-    // Handle array response (table returns array) or single row
+    // Handle table result (array) or single row
     const result = Array.isArray(generateResult) ? generateResult[0] : generateResult;
-    console.log('[OTP] Supabase result:', JSON.stringify(result));
+    console.log('[OTP] Parsed result:', JSON.stringify(result));
 
     if (!result?.success) {
       return {
         success: false,
-        error: 'Failed to generate OTP',
+        error: result?.error || 'Failed to generate OTP',
       };
     }
 
@@ -82,9 +85,10 @@ export const sendOTP = async (request: SendOTPRequest): Promise<SendOTPResponse>
 
     if (!otpCode) {
       console.log('[OTP] ERROR: No OTP code returned from Supabase');
+      console.log('[OTP] Full result was:', JSON.stringify(result));
       return {
         success: false,
-        error: 'Failed to generate OTP code',
+        error: 'Failed to generate OTP code. Please check Supabase function.',
       };
     }
 
