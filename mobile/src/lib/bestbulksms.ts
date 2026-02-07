@@ -6,6 +6,7 @@
  */
 
 import { supabase } from './supabase';
+import { Platform } from 'react-native';
 
 // Configuration from environment variables
 const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || '';
@@ -15,6 +16,8 @@ const BESTBULKSMS_SENDER_ID = 'ZOVO';
 // Log configuration on startup
 console.log('[BestBulkSMS] === Configuration ===');
 console.log('[BestBulkSMS] Sender ID:', BESTBULKSMS_SENDER_ID);
+console.log('[BestBulkSMS] API Key configured:', !!BESTBULKSMS_API_KEY);
+console.log('[BestBulkSMS] Platform:', Platform.OS);
 
 // Types
 export interface SendSMSRequest {
@@ -45,6 +48,7 @@ export interface BestBulkSMSErrorResponse {
 export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse> => {
   console.log('[SMS] === sendSMS called ===');
   console.log('[SMS] Request:', JSON.stringify(request));
+  console.log('[SMS] Platform:', Platform.OS);
 
   try {
     // Validate phone number format
@@ -57,48 +61,26 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
       };
     }
 
-    const smsPayload = {
-      to: phoneNumber,
-      message: request.message,
-      sender_id: request.sender_id || BESTBULKSMS_SENDER_ID,
-      api_key: BESTBULKSMS_API_KEY,
-    };
-
     console.log('[SMS] Sending to:', phoneNumber);
-    console.log('[SMS] From:', smsPayload.sender_id);
+    console.log('[SMS] From:', request.sender_id || BESTBULKSMS_SENDER_ID);
 
-    // Try to send via Supabase RPC function (works on web)
-    console.log('[SMS] Calling Supabase send_sms_via_api function...');
+    // On web, we MUST use Edge Function due to CORS
+    // On native, try Edge Function first, then fall back to direct
 
-    try {
-      const { data, error } = await supabase.rpc('send_sms_via_api', {
-        p_to: phoneNumber,
-        p_message: request.message,
-        p_sender_id: smsPayload.sender_id,
-      });
-
-      if (!error && data?.success) {
-        console.log('[SMS] SUCCESS via Supabase RPC!');
-        return {
-          success: true,
-          message: 'SMS sent successfully',
-          response: data,
-        };
-      }
-
-      console.log('[SMS] Supabase RPC failed, trying Edge Function...');
-    } catch (rpcError) {
-      console.log('[SMS] RPC error, trying Edge Function...');
-    }
-
-    // Try Edge Function
+    // Try Edge Function first (works on all platforms)
     try {
       console.log('[SMS] Calling Edge Function send-sms...');
+
+      if (!supabase) {
+        console.log('[SMS] ERROR: Supabase client not initialized');
+        throw new Error('Supabase not configured');
+      }
+
       const { data, error } = await supabase.functions.invoke('send-sms', {
         body: {
           to: phoneNumber,
           body: request.message,
-          from: smsPayload.sender_id,
+          from: request.sender_id || BESTBULKSMS_SENDER_ID,
           api_key: BESTBULKSMS_API_KEY,
           api_url: BESTBULKSMS_API_URL,
         },
@@ -109,36 +91,70 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
 
       if (error) {
         console.log('[SMS] Edge Function returned error:', error.message);
-      } else if (data?.success) {
+        throw new Error(error.message || 'Edge Function error');
+      }
+
+      if (data?.success) {
         console.log('[SMS] SUCCESS via Edge Function!');
         return {
           success: true,
           message: 'SMS sent successfully',
           response: data,
         };
-      } else {
-        console.log('[SMS] Edge Function returned:', JSON.stringify(data));
-        // Check if the SMS API returned a success even if data.success isn't true
-        if (data?.status === 'ok') {
-          console.log('[SMS] SMS API returned ok status');
-          return {
-            success: true,
-            message: 'SMS sent successfully',
-            response: data,
-          };
-        }
       }
 
-      console.log('[SMS] Edge Function did not succeed, trying direct...');
+      // Check if the SMS API returned a success even if data.success isn't true
+      if (data?.status === 'ok') {
+        console.log('[SMS] SMS API returned ok status');
+        return {
+          success: true,
+          message: 'SMS sent successfully',
+          response: data,
+        };
+      }
+
+      // Edge function returned but SMS failed
+      console.log('[SMS] Edge Function returned failure:', JSON.stringify(data));
+
+      // On web, we can't fall back to direct call, so return the error
+      if (Platform.OS === 'web') {
+        return {
+          success: false,
+          error: data?.error || 'SMS sending failed via Edge Function',
+          response: data,
+        };
+      }
+
+      // On native, try direct call
+      throw new Error(data?.error || 'Edge Function did not succeed');
     } catch (edgeError) {
       console.log('[SMS] Edge Function exception:', edgeError);
+
+      // On web, we can't fall back to direct API due to CORS
+      if (Platform.OS === 'web') {
+        const errorMessage = edgeError instanceof Error ? edgeError.message : 'Edge Function failed';
+        return {
+          success: false,
+          error: `SMS sending failed: ${errorMessage}. Please check Edge Function deployment.`,
+        };
+      }
     }
 
-    // Fall back to direct API call (works on native/Android)
+    // Fall back to direct API call (only works on native/Android/iOS)
+    console.log('[SMS] Falling back to direct API call (native only)...');
     return sendSMSDirect(request);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.log('[SMS] Error, trying direct call:', errorMessage);
+    console.log('[SMS] Error:', errorMessage);
+
+    // On web, don't try direct call
+    if (Platform.OS === 'web') {
+      return {
+        success: false,
+        error: `SMS sending failed: ${errorMessage}`,
+      };
+    }
+
     return sendSMSDirect(request);
   }
 };
