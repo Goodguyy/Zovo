@@ -35,74 +35,81 @@ supabase functions new send-sms
 
 Replace the contents of `supabase/functions/send-sms/index.ts` with:
 
+**IMPORTANT:** BestBulkSMS API uses `message` and `sender` fields (not `body` and `from`).
+
 ```typescript
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-interface SendSMSRequest {
-  to: string;
-  body: string;
-  from?: string;
-  api_key?: string;
-  api_url?: string;
 }
 
-serve(async (req: Request) => {
-  // Handle CORS preflight
+serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders })
   }
 
   try {
-    const requestBody: SendSMSRequest = await req.json();
+    const requestBody = await req.json()
 
-    console.log("[send-sms] Received request for:", requestBody.to);
+    console.log("[send-sms] Received request for:", requestBody.to)
 
-    // Get API key from request or environment
-    const apiKey = requestBody.api_key || Deno.env.get("BESTBULKSMS_API_KEY");
-    const apiUrl = requestBody.api_url || "https://www.bestbulksms.com.ng/api/sms/send";
+    const apiKey = requestBody.api_key || Deno.env.get("BESTBULKSMS_API_KEY")
+    const apiUrl = requestBody.api_url || "https://www.bestbulksms.com.ng/api/sms/send"
 
     if (!apiKey) {
       return new Response(
         JSON.stringify({ success: false, error: "SMS API key not configured" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      )
     }
 
     if (!requestBody.to || !requestBody.body) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing 'to' or 'body' parameter" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      )
     }
 
-    // Prepare SMS payload
+    // BestBulkSMS API uses 'message' and 'sender' fields
     const smsPayload = {
       to: requestBody.to,
-      body: requestBody.body,
-      from: requestBody.from || "ZOVO",
-    };
+      message: requestBody.body,
+      sender: requestBody.from || "ZOVO",
+    }
 
-    console.log("[send-sms] Sending to BestBulkSMS:", smsPayload.to);
+    console.log("[send-sms] Sending to BestBulkSMS:", smsPayload.to, "sender:", smsPayload.sender)
 
-    // Send SMS via BestBulkSMS API
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
+        "Authorization": "Bearer " + apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(smsPayload),
-    });
+    })
 
-    const responseData = await response.json();
+    const responseText = await response.text()
+    console.log("[send-sms] BestBulkSMS raw response:", responseText)
 
-    console.log("[send-sms] BestBulkSMS response:", JSON.stringify(responseData));
+    let responseData
+    try {
+      responseData = JSON.parse(responseText)
+    } catch (e) {
+      console.log("[send-sms] Failed to parse response as JSON")
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Invalid response from SMS provider: " + responseText.substring(0, 200),
+          raw_response: responseText
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
+    console.log("[send-sms] BestBulkSMS parsed response:", JSON.stringify(responseData))
 
     if (responseData.status === "ok" || responseData.success) {
       return new Response(
@@ -112,26 +119,27 @@ serve(async (req: Request) => {
           response: responseData,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      )
     }
 
     return new Response(
       JSON.stringify({
         success: false,
-        error: responseData.message || "SMS sending failed",
+        error: responseData.message || responseData.error || "SMS sending failed",
         response: responseData,
       }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    )
 
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Internal server error";
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Internal server error"
+    console.log("[send-sms] Exception:", errorMessage)
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    )
   }
-});
+})
 ```
 
 ## Step 6: Set Environment Variables (Optional)
