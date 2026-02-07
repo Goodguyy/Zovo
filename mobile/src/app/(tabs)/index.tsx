@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndicator, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,11 +9,9 @@ import { useAppStore, NIGERIAN_AREAS, SKILL_TAGS } from '@/lib/store';
 import { useSupabasePosts } from '@/lib/hooks/useSupabaseData';
 import { recordShare } from '@/lib/engagement';
 import { PostCard } from '@/components/PostCard';
+import { WebContainer } from '@/components/WebContainer';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
-
-// Max content width for web
-const MAX_CONTENT_WIDTH = 600;
 
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
@@ -21,10 +19,6 @@ export default function FeedScreen() {
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
 
-  // Responsive layout for web
-  const { width: windowWidth } = useWindowDimensions();
-  const isWeb = Platform.OS === 'web';
-  const contentMaxWidth = isWeb ? MAX_CONTENT_WIDTH : undefined;
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
@@ -72,9 +66,8 @@ export default function FeedScreen() {
   const hasFilters = selectedArea || selectedSkill;
 
   return (
-    <View className="flex-1 bg-gray-50">
-      {/* Centered container for web */}
-      <View style={isWeb ? { alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_WIDTH } : { flex: 1 }} className="flex-1">
+    <WebContainer>
+      <View className="flex-1 bg-gray-50">
         {/* Header */}
         <LinearGradient
           colors={['#059669', '#047857']}
@@ -319,6 +312,6 @@ export default function FeedScreen() {
         </View>
       </ScrollView>
       </View>
-    </View>
+    </WebContainer>
   );
 }

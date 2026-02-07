@@ -1,5 +1,5 @@
-import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { View, Text, Image, Pressable, Dimensions, Platform, useWindowDimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, Image, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Eye, Share2, MapPin, BadgeCheck, Heart } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,11 +7,7 @@ import Animated, { FadeInUp, useAnimatedStyle, useSharedValue, withSpring, withS
 import { useAppStore, formatTimeAgo } from '@/lib/store';
 import { useSupabaseProfile, type AppPost } from '@/lib/hooks/useSupabaseData';
 import { useEngagement } from '@/lib/useEngagement';
-import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
-
-// Max width for web to prevent stretching
-const MAX_CARD_WIDTH = 500;
 
 interface PostCardProps {
   post: AppPost;
@@ -24,12 +20,6 @@ export function PostCard({ post, index = 0, onShare, onVisible }: PostCardProps)
   const router = useRouter();
   const currentUser = useAppStore((s) => s.currentUser);
   const hasTrackedView = useRef(false);
-
-  // Use useWindowDimensions for responsive width
-  const { width: windowWidth } = useWindowDimensions();
-  const CARD_WIDTH = Platform.OS === 'web'
-    ? Math.min(windowWidth - 32, MAX_CARD_WIDTH)
-    : windowWidth - 32;
 
   // Fetch profile from Supabase
   const { profile } = useSupabaseProfile(post.userId);
@@ -126,7 +116,7 @@ export function PostCard({ post, index = 0, onShare, onVisible }: PostCardProps)
         <View
           className="bg-white rounded-2xl overflow-hidden shadow-lg"
           style={{
-            width: CARD_WIDTH,
+            width: '100%',
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.1,
