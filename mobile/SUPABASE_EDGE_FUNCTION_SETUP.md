@@ -73,7 +73,7 @@ serve(async (req) => {
 
     console.log("[send-sms] Sending to:", requestBody.to)
 
-    const response = await fetch("https://www.bestbulksms.com.ng/api/v2/sms/send", {
+    const response = await fetch("https://www.bestbulksms.com.ng/api/sms/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(smsPayload)
