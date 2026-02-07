@@ -7,9 +7,9 @@
 
 import { supabase } from './supabase';
 
-// Configuration
-const BESTBULKSMS_API_KEY = 'c176e532934d12ea1da3d800376a00b116fe08a3908b8e8fd9ce285911fc94e5';
-const BESTBULKSMS_API_URL = 'https://www.bestbulksms.com.ng/api/sms/send';
+// Configuration from environment variables
+const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || '';
+const BESTBULKSMS_API_URL = process.env.EXPO_PUBLIC_BULKSMS_API_URL || 'https://www.bestbulksms.com.ng/api/sms/send';
 const BESTBULKSMS_SENDER_ID = 'ZOVO';
 
 // Log configuration on startup
