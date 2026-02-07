@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndicator, Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,11 +12,19 @@ import { PostCard } from '@/components/PostCard';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
 
+// Max content width for web
+const MAX_CONTENT_WIDTH = 600;
+
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
+
+  // Responsive layout for web
+  const { width: windowWidth } = useWindowDimensions();
+  const isWeb = Platform.OS === 'web';
+  const contentMaxWidth = isWeb ? MAX_CONTENT_WIDTH : undefined;
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
@@ -65,15 +73,17 @@ export default function FeedScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Header */}
-      <LinearGradient
-        colors={['#059669', '#047857']}
-        style={{
-          paddingTop: insets.top + 8,
-          paddingBottom: 16,
-          paddingHorizontal: 16,
-        }}
-      >
+      {/* Centered container for web */}
+      <View style={isWeb ? { alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_WIDTH } : { flex: 1 }} className="flex-1">
+        {/* Header */}
+        <LinearGradient
+          colors={['#059669', '#047857']}
+          style={{
+            paddingTop: insets.top + 8,
+            paddingBottom: 16,
+            paddingHorizontal: 16,
+          }}
+        >
         <View className="flex-row items-center justify-between">
           <View>
             <Text className="text-white/80 text-sm font-medium">Welcome to</Text>
@@ -308,6 +318,7 @@ export default function FeedScreen() {
           </Text>
         </View>
       </ScrollView>
+      </View>
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { View, Text, Image, Pressable, Dimensions } from 'react-native';
+import { View, Text, Image, Pressable, Dimensions, Platform, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Eye, Share2, MapPin, BadgeCheck, Heart } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,8 +10,8 @@ import { useEngagement } from '@/lib/useEngagement';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = width - 32;
+// Max width for web to prevent stretching
+const MAX_CARD_WIDTH = 500;
 
 interface PostCardProps {
   post: AppPost;
@@ -24,6 +24,12 @@ export function PostCard({ post, index = 0, onShare, onVisible }: PostCardProps)
   const router = useRouter();
   const currentUser = useAppStore((s) => s.currentUser);
   const hasTrackedView = useRef(false);
+
+  // Use useWindowDimensions for responsive width
+  const { width: windowWidth } = useWindowDimensions();
+  const CARD_WIDTH = Platform.OS === 'web'
+    ? Math.min(windowWidth - 32, MAX_CARD_WIDTH)
+    : windowWidth - 32;
 
   // Fetch profile from Supabase
   const { profile } = useSupabaseProfile(post.userId);
