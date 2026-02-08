@@ -2,13 +2,14 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndicator, Image, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Filter, X, TrendingUp, Camera, Eye, Share2, MapPin, BadgeCheck, Heart, ChevronRight } from 'lucide-react-native';
+import { Filter, X, TrendingUp, Camera, Eye, Share2, MapPin, BadgeCheck, Heart, ChevronRight, Briefcase } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useAppStore, formatTimeAgo } from '@/lib/store';
 import { useSupabasePosts, useSupabaseProfile, type AppPost } from '@/lib/hooks/useSupabaseData';
 import { recordShare } from '@/lib/engagement';
 import { useEngagement } from '@/lib/useEngagement';
-import { NIGERIAN_STATES, ALL_SKILLS } from '@/lib/nigerianData';
+import { LocationPicker } from '@/components/LocationPicker';
+import { SkillsPicker } from '@/components/SkillsPicker';
 
 // Web-specific post card component
 function WebPostCard({ post, onShare }: { post: AppPost; onShare: () => void }) {
@@ -106,11 +107,20 @@ export default function WebFeedScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedArea, setSelectedArea] = useState<string | null>(null);
-  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+
+  // Build area filter from state + city
+  const selectedArea = selectedCity && selectedState
+    ? `${selectedCity}, ${selectedState}`
+    : selectedCity || selectedState || null;
+
+  // Build skill filter (use first selected skill for filtering)
+  const selectedSkill = selectedSkills.length > 0 ? selectedSkills[0] : null;
 
   const { posts, loading, refetch } = useSupabasePosts({
-    area: selectedArea || undefined,
+    area: selectedCity || selectedState || undefined,
     skill: selectedSkill || undefined,
   });
 
@@ -139,8 +149,9 @@ export default function WebFeedScreen() {
   };
 
   const clearFilters = () => {
-    setSelectedArea(null);
-    setSelectedSkill(null);
+    setSelectedState(null);
+    setSelectedCity(null);
+    setSelectedSkills([]);
   };
 
   const hasFilters = selectedArea || selectedSkill;
@@ -174,38 +185,28 @@ export default function WebFeedScreen() {
       {showFilters && (
         <View style={styles.filtersPanel}>
           <View style={styles.filtersContent}>
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Area</Text>
-              <View style={styles.filterOptions}>
-                {NIGERIAN_STATES.slice(0, 8).map((area) => (
-                  <Pressable
-                    key={area}
-                    onPress={() => setSelectedArea(selectedArea === area ? null : area)}
-                    style={[styles.filterChip, selectedArea === area && styles.filterChipActive]}
-                  >
-                    <Text style={[styles.filterChipText, selectedArea === area && styles.filterChipTextActive]}>
-                      {area}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+            {/* Location filter */}
+            <LocationPicker
+              state={selectedState}
+              city={selectedCity}
+              onStateChange={setSelectedState}
+              onCityChange={setSelectedCity}
+              label="Filter by Location"
+              allowCustom={true}
+            />
+
+            {/* Skill filter */}
+            <View style={{ marginTop: 16 }}>
+              <SkillsPicker
+                selectedSkills={selectedSkills}
+                onSkillsChange={setSelectedSkills}
+                label="Filter by Skill"
+                singleSelect={true}
+                allowCustom={true}
+              />
             </View>
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Skills</Text>
-              <View style={styles.filterOptions}>
-                {ALL_SKILLS.slice(0, 8).map((skill) => (
-                  <Pressable
-                    key={skill}
-                    onPress={() => setSelectedSkill(selectedSkill === skill ? null : skill)}
-                    style={[styles.filterChip, selectedSkill === skill && styles.filterChipActive]}
-                  >
-                    <Text style={[styles.filterChipText, selectedSkill === skill && styles.filterChipTextActive]}>
-                      {skill}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+
+            {/* Clear filters */}
             {hasFilters && (
               <Pressable onPress={clearFilters} style={styles.clearFilters}>
                 <Text style={styles.clearFiltersText}>Clear all filters</Text>
@@ -220,16 +221,18 @@ export default function WebFeedScreen() {
         <View style={styles.activeFilters}>
           {selectedArea && (
             <View style={styles.activeFilterChip}>
+              <MapPin size={12} color="#059669" />
               <Text style={styles.activeFilterText}>{selectedArea}</Text>
-              <Pressable onPress={() => setSelectedArea(null)}>
+              <Pressable onPress={() => { setSelectedState(null); setSelectedCity(null); }}>
                 <X size={14} color="#059669" />
               </Pressable>
             </View>
           )}
           {selectedSkill && (
             <View style={styles.activeFilterChip}>
+              <Briefcase size={12} color="#059669" />
               <Text style={styles.activeFilterText}>{selectedSkill}</Text>
-              <Pressable onPress={() => setSelectedSkill(null)}>
+              <Pressable onPress={() => setSelectedSkills([])}>
                 <X size={14} color="#059669" />
               </Pressable>
             </View>
