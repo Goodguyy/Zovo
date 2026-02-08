@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, Image, Pressable } from 'react-native';
+import { View, Text, Image, Pressable, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Eye, Share2, MapPin, BadgeCheck, Heart } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -128,7 +128,7 @@ export function PostCard({ post, index = 0, onShare, onVisible }: PostCardProps)
           <View className="relative">
             <Image
               source={{ uri: post.mediaUrl }}
-              className="w-full h-56"
+              style={{ width: '100%', height: 220, maxWidth: '100%' }}
               resizeMode="cover"
             />
             <LinearGradient

@@ -301,7 +301,7 @@ export default function PostDetailScreen() {
         <View className="relative">
           <Image
             source={{ uri: post.mediaUrl }}
-            className="w-full h-80"
+            style={{ width: '100%', height: 320, maxWidth: '100%' }}
             resizeMode="cover"
           />
 

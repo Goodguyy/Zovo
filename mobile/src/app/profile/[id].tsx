@@ -251,7 +251,7 @@ export default function ProfileScreen() {
                   >
                     <Image
                       source={{ uri: post.mediaUrl }}
-                      className="w-20 h-20 rounded-lg"
+                      style={{ width: 80, height: 80, borderRadius: 8 }}
                       resizeMode="cover"
                     />
                     <View className="ml-3 flex-1 justify-center">
