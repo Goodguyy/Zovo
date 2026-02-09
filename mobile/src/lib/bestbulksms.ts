@@ -2,21 +2,22 @@
  * BestBulkSMS Integration for ZOVO OTP
  *
  * Handles SMS delivery via BestBulkSMS API
- * Routes through Supabase Edge Function to avoid CORS on web
+ * Routes through backend server to avoid CORS on web
  */
 
-import { supabase } from './supabase';
 import { Platform } from 'react-native';
 
 // Configuration from environment variables
 const BESTBULKSMS_API_KEY = process.env.EXPO_PUBLIC_BESTBULKSMS_API_KEY || '';
 const BESTBULKSMS_API_URL = process.env.EXPO_PUBLIC_BULKSMS_API_URL || 'https://www.bestbulksms.com.ng/api/sms/send';
+const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
 const BESTBULKSMS_SENDER_ID = 'ZOVO';
 
 // Log configuration on startup
 console.log('[BestBulkSMS] === Configuration ===');
 console.log('[BestBulkSMS] Sender ID:', BESTBULKSMS_SENDER_ID);
 console.log('[BestBulkSMS] API Key configured:', !!BESTBULKSMS_API_KEY);
+console.log('[BestBulkSMS] Backend URL:', BACKEND_URL);
 console.log('[BestBulkSMS] Platform:', Platform.OS);
 
 // Types
@@ -33,7 +34,7 @@ export interface SendSMSResponse {
   request_id?: string;
   balance?: number;
   status_code?: string;
-  response?: any;
+  response?: unknown;
 }
 
 export interface BestBulkSMSErrorResponse {
@@ -41,9 +42,20 @@ export interface BestBulkSMSErrorResponse {
   message: string;
 }
 
+interface BackendSMSResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  request_id?: string;
+  balance?: number;
+  status?: string;
+  status_code?: string;
+  response?: unknown;
+}
+
 /**
- * Send SMS via Supabase Edge Function (avoids CORS issues on web)
- * Falls back to direct API call on native
+ * Send SMS via backend server (avoids CORS issues on web)
+ * Falls back to direct API call on native if backend fails
  */
 export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse> => {
   console.log('[SMS] === sendSMS called ===');
@@ -64,38 +76,30 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
     console.log('[SMS] Sending to:', phoneNumber);
     console.log('[SMS] From:', request.sender_id || BESTBULKSMS_SENDER_ID);
 
-    // On web, we MUST use Edge Function due to CORS
-    // On native, try Edge Function first, then fall back to direct
-
-    // Try Edge Function first (works on all platforms)
+    // Try backend API first (works on all platforms, handles CORS)
     try {
-      console.log('[SMS] Calling Edge Function send-sms...');
+      console.log('[SMS] Calling backend API...');
+      console.log('[SMS] Backend URL:', `${BACKEND_URL}/api/sms/send`);
 
-      if (!supabase) {
-        console.log('[SMS] ERROR: Supabase client not initialized');
-        throw new Error('Supabase not configured');
-      }
-
-      const { data, error } = await supabase.functions.invoke('send-sms', {
-        body: {
+      const response = await fetch(`${BACKEND_URL}/api/sms/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           to: phoneNumber,
           body: request.message,
           from: request.sender_id || BESTBULKSMS_SENDER_ID,
           api_key: BESTBULKSMS_API_KEY,
           api_url: BESTBULKSMS_API_URL,
-        },
+        }),
       });
 
-      console.log('[SMS] Edge Function response - data:', JSON.stringify(data));
-      console.log('[SMS] Edge Function response - error:', error ? JSON.stringify(error) : 'none');
-
-      if (error) {
-        console.log('[SMS] Edge Function returned error:', error.message);
-        throw new Error(error.message || 'Edge Function error');
-      }
+      const data = (await response.json()) as BackendSMSResponse;
+      console.log('[SMS] Backend response:', JSON.stringify(data));
 
       if (data?.success) {
-        console.log('[SMS] SUCCESS via Edge Function!');
+        console.log('[SMS] SUCCESS via backend!');
         return {
           success: true,
           message: 'SMS sent successfully',
@@ -113,29 +117,29 @@ export const sendSMS = async (request: SendSMSRequest): Promise<SendSMSResponse>
         };
       }
 
-      // Edge function returned but SMS failed
-      console.log('[SMS] Edge Function returned failure:', JSON.stringify(data));
+      // Backend returned but SMS failed
+      console.log('[SMS] Backend returned failure:', JSON.stringify(data));
 
       // On web, we can't fall back to direct call, so return the error
       if (Platform.OS === 'web') {
         return {
           success: false,
-          error: data?.error || 'SMS sending failed via Edge Function',
+          error: data?.error || 'SMS sending failed via backend',
           response: data,
         };
       }
 
       // On native, try direct call
-      throw new Error(data?.error || 'Edge Function did not succeed');
-    } catch (edgeError) {
-      console.log('[SMS] Edge Function exception:', edgeError);
+      throw new Error(data?.error || 'Backend did not succeed');
+    } catch (backendError) {
+      console.log('[SMS] Backend exception:', backendError);
 
       // On web, we can't fall back to direct API due to CORS
       if (Platform.OS === 'web') {
-        const errorMessage = edgeError instanceof Error ? edgeError.message : 'Edge Function failed';
+        const errorMessage = backendError instanceof Error ? backendError.message : 'Backend failed';
         return {
           success: false,
-          error: `SMS sending failed: ${errorMessage}. Please check Edge Function deployment.`,
+          error: `SMS sending failed: ${errorMessage}`,
         };
       }
     }
@@ -192,7 +196,7 @@ const sendSMSDirect = async (request: SendSMSRequest): Promise<SendSMSResponse> 
     });
 
     console.log('[SMS] Direct response status:', response.status);
-    const responseData = await response.json();
+    const responseData = (await response.json()) as { status?: string; message?: string; request_id?: string; balance?: number };
     console.log('[SMS] Direct response data:', JSON.stringify(responseData));
 
     if (!response.ok || responseData.status !== 'ok') {
@@ -224,7 +228,7 @@ const sendSMSDirect = async (request: SendSMSRequest): Promise<SendSMSResponse> 
 
 /**
  * Send OTP SMS to user
- * Formatted message: "Your HustleWall OTP is {{OTP}}. Expires in 5 minutes."
+ * Formatted message: "Your ZOVO OTP is {{OTP}}. Expires in 5 minutes."
  */
 export const sendOTPSMS = async (
   phoneNumber: string,
