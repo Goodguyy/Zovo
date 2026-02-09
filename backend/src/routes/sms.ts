@@ -29,20 +29,19 @@ smsRouter.post("/send", async (c) => {
       return c.json({ success: false, error: "SMS API key not configured" }, 500);
     }
 
-    // BestBulkSMS requires a registered sender ID
-    // If no valid sender ID, try sending without one (API will use default)
-    const requestBody: { to: string; body: string; from?: string } = {
+    // Always use ZOVO as sender ID (registered with BestBulkSMS)
+    const senderID = from || "ZOVO";
+
+    const requestBody = {
       to,
       body,
+      from: senderID,
     };
 
-    // Only add sender ID if it looks valid and is provided
-    if (from && from.length >= 3 && from.length <= 11) {
-      requestBody.from = from;
-    }
-
-    console.log(`[SMS] Sending to: ${to}, body: ${body.substring(0, 30)}...`);
-    console.log(`[SMS] Request body:`, JSON.stringify(requestBody));
+    console.log(`[SMS] Sending to: ${to}`);
+    console.log(`[SMS] From: ${senderID}`);
+    console.log(`[SMS] Message: ${body.substring(0, 30)}...`);
+    console.log(`[SMS] Full request:`, JSON.stringify(requestBody));
 
     const response = await fetch(smsApiUrl, {
       method: "POST",
