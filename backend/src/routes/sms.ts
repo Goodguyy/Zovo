@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 
 interface SMSApiResponse {
+  ok?: boolean;
   status?: string;
   message?: string;
+  error?: string;
   request_id?: string;
   balance?: number;
 }
@@ -35,7 +37,7 @@ smsRouter.post("/send", async (c) => {
     const requestBody = {
       to,
       body,
-      from: senderID,
+      sender_id: senderID,
     };
 
     console.log(`[SMS] Sending to: ${to}`);
@@ -55,10 +57,10 @@ smsRouter.post("/send", async (c) => {
     const data = (await response.json()) as SMSApiResponse;
     console.log("[SMS] API Response:", JSON.stringify(data));
 
-    if (!response.ok || data.status !== "ok") {
+    if (!response.ok || (data.ok === false && data.status !== "ok")) {
       return c.json({
         success: false,
-        error: data.message || "Failed to send SMS",
+        error: data.error || data.message || "Failed to send SMS",
         status_code: data.status,
         response: data,
       });
