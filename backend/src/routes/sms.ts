@@ -36,7 +36,7 @@ smsRouter.post("/send", async (c) => {
 
     const requestBody = {
       to,
-      body,
+      message: body,
       sender_id: senderID,
     };
 
