@@ -30,6 +30,7 @@ import {
   AlertCircle,
   Heart,
   Trash2,
+  Flag,
 } from 'lucide-react-native';
 import Animated, {
   FadeIn,
@@ -351,6 +352,15 @@ export default function PostDetailScreen() {
 
           {/* Action buttons */}
           <View className="absolute top-12 right-4 flex-row gap-2" style={{ top: insets.top + 8 }}>
+            {/* Report button (only for non-owners) */}
+            {!isOwner && (
+              <Pressable
+                onPress={() => router.push(`/report?type=post&id=${post.id}`)}
+                className="w-10 h-10 bg-black/40 rounded-full items-center justify-center"
+              >
+                <Flag size={18} color="#fff" />
+              </Pressable>
+            )}
             {/* Delete button (only for owner) */}
             {isOwner && (
               <Pressable

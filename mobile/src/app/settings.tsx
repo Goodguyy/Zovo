@@ -13,6 +13,8 @@ import {
   ChevronRight,
   LogOut,
   ExternalLink,
+  FileText,
+  Flag,
 } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useAppStore } from '@/lib/store';
@@ -173,9 +175,7 @@ export default function SettingsScreen() {
               icon={<User size={20} color="#059669" />}
               title="Edit Profile"
               subtitle="Update your name, skills, and area"
-              onPress={() => {
-                Alert.alert('Coming Soon', 'Profile editing will be available in the next update.');
-              }}
+              onPress={() => router.push('/edit-profile')}
             />
             <View className="h-px bg-gray-100 mx-4" />
             <SettingItem
@@ -198,9 +198,16 @@ export default function SettingsScreen() {
             </Text>
             <SettingItem
               icon={<Shield size={20} color="#059669" />}
-              title="Privacy & Safety"
+              title="Privacy Policy"
               subtitle="How we protect your information"
-              onPress={handlePrivacy}
+              onPress={() => router.push('/privacy')}
+            />
+            <View className="h-px bg-gray-100 mx-4" />
+            <SettingItem
+              icon={<FileText size={20} color="#059669" />}
+              title="Terms of Service"
+              subtitle="Read our terms and conditions"
+              onPress={() => router.push('/terms')}
             />
             <View className="h-px bg-gray-100 mx-4" />
             <SettingItem

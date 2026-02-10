@@ -1,10 +1,12 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const unstable_settings = {
   initialRouteName: '(tabs)',
@@ -28,7 +30,43 @@ const ZovoTheme = {
   },
 };
 
+function useOnboardingCheck() {
+  const [isReady, setIsReady] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    async function checkOnboarding() {
+      try {
+        const completed = await AsyncStorage.getItem('onboarding_completed');
+        setNeedsOnboarding(completed !== 'true');
+      } catch (error) {
+        console.log('Error checking onboarding:', error);
+      } finally {
+        setIsReady(true);
+        SplashScreen.hideAsync();
+      }
+    }
+    checkOnboarding();
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    const inOnboarding = segments[0] === 'onboarding';
+
+    if (needsOnboarding && !inOnboarding) {
+      router.replace('/onboarding');
+    }
+  }, [isReady, needsOnboarding, segments, router]);
+
+  return { isReady };
+}
+
 function RootLayoutNav() {
+  useOnboardingCheck();
+
   return (
     <ThemeProvider value={ZovoTheme}>
       <Stack
@@ -38,6 +76,13 @@ function RootLayoutNav() {
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="onboarding"
+          options={{
+            headerShown: false,
+            animation: 'fade',
+          }}
+        />
         <Stack.Screen
           name="auth"
           options={{
@@ -65,6 +110,35 @@ function RootLayoutNav() {
           options={{
             headerShown: false,
             animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
+          name="edit-profile"
+          options={{
+            headerShown: false,
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
+          name="terms"
+          options={{
+            headerShown: false,
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
+          name="privacy"
+          options={{
+            headerShown: false,
+            animation: 'slide_from_right',
+          }}
+        />
+        <Stack.Screen
+          name="report"
+          options={{
+            headerShown: false,
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
           }}
         />
       </Stack>
