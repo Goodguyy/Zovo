@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, RefreshControl, Share, ActivityIndicator, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Filter, X, TrendingUp, Camera, MapPin, Briefcase } from 'lucide-react-native';
+import { Filter, X, TrendingUp, Camera, MapPin, Briefcase, Search } from 'lucide-react-native';
 import Animated, { FadeIn, FadeInDown, SlideInDown } from 'react-native-reanimated';
 import { useAppStore } from '@/lib/store';
 import { useSupabasePosts } from '@/lib/hooks/useSupabaseData';
@@ -20,12 +20,24 @@ export default function FeedScreen() {
   const router = useRouter();
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
+  const feedFilters = useAppStore((s) => s.feedFilters);
+  const setFeedFilters = useAppStore((s) => s.setFeedFilters);
+  const clearFeedFiltersStore = useAppStore((s) => s.clearFeedFilters);
 
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedState, setSelectedState] = useState<string | null>(null);
-  const [selectedCity, setSelectedCity] = useState<string | null>(null);
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+
+  // Use persisted filter values
+  const selectedState = feedFilters.state;
+  const selectedCity = feedFilters.city;
+  const selectedSkills = feedFilters.skills;
+  const searchQuery = feedFilters.searchQuery;
+
+  // Setters that update the store
+  const setSelectedState = (value: string | null) => setFeedFilters({ state: value });
+  const setSelectedCity = (value: string | null) => setFeedFilters({ city: value });
+  const setSelectedSkills = (value: string[]) => setFeedFilters({ skills: value });
+  const setSearchQuery = (value: string) => setFeedFilters({ searchQuery: value });
 
   // Build area filter from state + city
   const selectedArea = selectedCity && selectedState
@@ -35,16 +47,29 @@ export default function FeedScreen() {
   // Build skill filter (use first selected skill for filtering)
   const selectedSkill = selectedSkills.length > 0 ? selectedSkills[0] : null;
 
-  // Fetch posts from Supabase
-  const { posts, loading, refetch } = useSupabasePosts({
+  // Fetch posts from Supabase with pagination
+  const { posts, loading, loadingMore, hasMore, refetch, loadMore } = useSupabasePosts({
     area: selectedCity || selectedState || undefined,
     skill: selectedSkill || undefined,
+    pageSize: 20,
   });
 
-  // Posts are already filtered by the hook, just sort by date
+  // Posts are already filtered by the hook, apply search filter and sort by date
   const filteredPosts = useMemo(() => {
-    return [...posts].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [posts]);
+    let result = [...posts];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(post =>
+        post.caption.toLowerCase().includes(query) ||
+        post.skills.some(skill => skill.toLowerCase().includes(query)) ||
+        post.area.toLowerCase().includes(query)
+      );
+    }
+
+    return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [posts, searchQuery]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -69,13 +94,11 @@ export default function FeedScreen() {
   };
 
   const clearFilters = () => {
-    setSelectedState(null);
-    setSelectedCity(null);
-    setSelectedSkills([]);
+    clearFeedFiltersStore();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const hasFilters = selectedArea || selectedSkill;
+  const hasFilters = selectedArea || selectedSkill || searchQuery.trim();
 
   return (
     <WebContainer>
@@ -142,6 +165,26 @@ export default function FeedScreen() {
           </Animated.View>
         )}
       </LinearGradient>
+
+      {/* Search Bar */}
+      <View className="px-4 py-3 bg-white border-b border-gray-100">
+        <View className="flex-row items-center bg-gray-100 rounded-xl px-4 py-2.5">
+          <Search size={20} color="#9ca3af" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search skills, areas, or keywords..."
+            placeholderTextColor="#9ca3af"
+            className="flex-1 ml-3 text-gray-900 text-base"
+            returnKeyType="search"
+          />
+          {searchQuery.trim() && (
+            <Pressable onPress={() => setSearchQuery('')}>
+              <X size={18} color="#9ca3af" />
+            </Pressable>
+          )}
+        </View>
+      </View>
 
       {/* Filters Panel */}
       {showFilters && (
@@ -253,14 +296,30 @@ export default function FeedScreen() {
             )}
           </Animated.View>
         ) : (
-          filteredPosts.map((post, index) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              index={index}
-              onShare={() => handleShare(post)}
-            />
-          ))
+          <>
+            {filteredPosts.map((post, index) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                index={index}
+                onShare={() => handleShare(post)}
+              />
+            ))}
+            {/* Load More Button */}
+            {hasMore && (
+              <Pressable
+                onPress={loadMore}
+                disabled={loadingMore}
+                className="bg-emerald-100 rounded-xl py-4 items-center mb-4"
+              >
+                {loadingMore ? (
+                  <ActivityIndicator size="small" color="#059669" />
+                ) : (
+                  <Text className="text-emerald-700 font-semibold">Load More</Text>
+                )}
+              </Pressable>
+            )}
+          </>
         )}
 
         {/* Safety disclaimer */}

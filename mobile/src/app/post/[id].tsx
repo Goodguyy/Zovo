@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +29,7 @@ import {
   Users,
   AlertCircle,
   Heart,
+  Trash2,
 } from 'lucide-react-native';
 import Animated, {
   FadeIn,
@@ -41,7 +43,7 @@ import Animated, {
 import { useAppStore, formatTimeAgo } from '@/lib/store';
 import { useEngagement } from '@/lib/useEngagement';
 import { useSupabaseProfile, AppPost, AppProfile } from '@/lib/hooks/useSupabaseData';
-import { getPostById, getProfileById } from '@/lib/services/supabaseService';
+import { getPostById, getProfileById, deletePost } from '@/lib/services/supabaseService';
 import { DBPost } from '@/lib/supabase';
 import { cn } from '@/lib/cn';
 import * as Haptics from 'expo-haptics';
@@ -153,6 +155,10 @@ export default function PostDetailScreen() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Check if current user owns this post
+  const isOwner = currentUser?.id === post?.userId;
 
   // Animation values for live metrics
   const viewScale = useSharedValue(1);
@@ -289,6 +295,35 @@ export default function PostDetailScreen() {
     }
   };
 
+  const handleDeletePost = () => {
+    if (!currentUser?.id || !post?.id) return;
+
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeleting(true);
+            const result = await deletePost(post.id, currentUser.id);
+            setIsDeleting(false);
+
+            if (result.success) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.back();
+            } else {
+              setErrorMessage(result.error || 'Failed to delete post');
+              setShowErrorModal(true);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Use real-time counts with fallback
   const displayViewCount = viewCount || post.viewCount;
   const displayShareCount = shareCount || post.shareCount;
@@ -314,14 +349,30 @@ export default function PostDetailScreen() {
             <ArrowLeft size={22} color="#fff" />
           </Pressable>
 
-          {/* Share button */}
-          <Pressable
-            onPress={handleShare}
-            className="absolute top-12 right-4 w-10 h-10 bg-black/40 rounded-full items-center justify-center"
-            style={{ top: insets.top + 8 }}
-          >
-            <Share2 size={20} color="#fff" />
-          </Pressable>
+          {/* Action buttons */}
+          <View className="absolute top-12 right-4 flex-row gap-2" style={{ top: insets.top + 8 }}>
+            {/* Delete button (only for owner) */}
+            {isOwner && (
+              <Pressable
+                onPress={handleDeletePost}
+                disabled={isDeleting}
+                className="w-10 h-10 bg-red-500/80 rounded-full items-center justify-center"
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Trash2 size={18} color="#fff" />
+                )}
+              </Pressable>
+            )}
+            {/* Share button */}
+            <Pressable
+              onPress={handleShare}
+              className="w-10 h-10 bg-black/40 rounded-full items-center justify-center"
+            >
+              <Share2 size={20} color="#fff" />
+            </Pressable>
+          </View>
 
           {/* Live engagement stats */}
           <View className="absolute bottom-4 left-4 right-4 flex-row gap-2">

@@ -63,19 +63,25 @@ const transformDBUserToAppProfile = (dbUser: DBUser): AppProfile => ({
 });
 
 /**
- * Hook to fetch posts from Supabase with real-time updates
+ * Hook to fetch posts from Supabase with real-time updates and pagination
  */
 export function useSupabasePosts(options?: {
   area?: string;
   skill?: string;
   userId?: string;
   limit?: number;
+  pageSize?: number;
 }) {
   const [posts, setPosts] = useState<AppPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
 
-  const fetchPosts = useCallback(async () => {
+  const pageSize = options?.pageSize || 20;
+
+  const fetchPosts = useCallback(async (reset = true) => {
     if (!isSupabaseConfigured() || !supabase) {
       setError('Supabase not configured');
       setLoading(false);
@@ -83,14 +89,24 @@ export function useSupabasePosts(options?: {
     }
 
     try {
-      setLoading(true);
+      if (reset) {
+        setLoading(true);
+        setPage(0);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const currentPage = reset ? 0 : page;
+      const offset = currentPage * pageSize;
+
       let query = supabase
         .from('posts')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(offset, offset + pageSize - 1);
 
       if (options?.area) {
-        query = query.eq('area', options.area);
+        query = query.ilike('area', `%${options.area}%`);
       }
 
       if (options?.skill) {
@@ -111,7 +127,13 @@ export function useSupabasePosts(options?: {
         console.log('Error fetching posts:', fetchError);
         setError(fetchError.message);
       } else {
-        setPosts((data || []).map(transformDBPostToAppPost));
+        const newPosts = (data || []).map(transformDBPostToAppPost);
+        if (reset) {
+          setPosts(newPosts);
+        } else {
+          setPosts(prev => [...prev, ...newPosts]);
+        }
+        setHasMore(newPosts.length === pageSize);
         setError(null);
       }
     } catch (err) {
@@ -119,13 +141,27 @@ export function useSupabasePosts(options?: {
       setError('Failed to fetch posts');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [options?.area, options?.skill, options?.userId, options?.limit]);
+  }, [options?.area, options?.skill, options?.userId, options?.limit, page, pageSize]);
+
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMore) {
+      setPage(prev => prev + 1);
+    }
+  }, [loadingMore, hasMore]);
 
   // Initial fetch
   useEffect(() => {
-    fetchPosts();
-  }, [fetchPosts]);
+    fetchPosts(true);
+  }, [options?.area, options?.skill, options?.userId]);
+
+  // Load more when page changes
+  useEffect(() => {
+    if (page > 0) {
+      fetchPosts(false);
+    }
+  }, [page]);
 
   // Subscribe to real-time updates
   useEffect(() => {
@@ -135,7 +171,7 @@ export function useSupabasePosts(options?: {
       if (eventType === 'INSERT') {
         const newPost = transformDBPostToAppPost(dbPost);
         // Check if post matches filters
-        if (options?.area && newPost.area !== options.area) return;
+        if (options?.area && !newPost.area.toLowerCase().includes(options.area.toLowerCase())) return;
         if (options?.skill && !newPost.skills.includes(options.skill)) return;
         if (options?.userId && newPost.userId !== options.userId) return;
 
@@ -152,7 +188,7 @@ export function useSupabasePosts(options?: {
     return unsubscribe;
   }, [options?.area, options?.skill, options?.userId]);
 
-  return { posts, loading, error, refetch: fetchPosts };
+  return { posts, loading, loadingMore, error, hasMore, refetch: () => fetchPosts(true), loadMore };
 }
 
 /**

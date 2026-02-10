@@ -41,9 +41,19 @@ interface AppState {
   currentUser: Profile | null;
   isAuthenticated: boolean;
 
+  // Feed Filters (persisted)
+  feedFilters: {
+    state: string | null;
+    city: string | null;
+    skills: string[];
+    searchQuery: string;
+  };
+
   // Actions
   login: (profile: Profile) => void;
   logout: () => void;
+  setFeedFilters: (filters: Partial<AppState['feedFilters']>) => void;
+  clearFeedFilters: () => void;
 }
 
 // Nigerian areas for filtering
@@ -120,9 +130,31 @@ export const useAppStore = create<AppState>()(
       currentUser: null,
       isAuthenticated: false,
 
+      feedFilters: {
+        state: null,
+        city: null,
+        skills: [],
+        searchQuery: '',
+      },
+
       login: (profile) => set({ currentUser: profile, isAuthenticated: true }),
 
       logout: () => set({ currentUser: null, isAuthenticated: false }),
+
+      setFeedFilters: (filters) =>
+        set((state) => ({
+          feedFilters: { ...state.feedFilters, ...filters },
+        })),
+
+      clearFeedFilters: () =>
+        set({
+          feedFilters: {
+            state: null,
+            city: null,
+            skills: [],
+            searchQuery: '',
+          },
+        }),
     }),
     {
       name: 'zovo-storage',
@@ -130,6 +162,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         currentUser: state.currentUser,
         isAuthenticated: state.isAuthenticated,
+        feedFilters: state.feedFilters,
       }),
     }
   )
